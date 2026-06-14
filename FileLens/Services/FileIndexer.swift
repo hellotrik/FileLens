@@ -359,26 +359,59 @@ final class FileIndexer {
         let shouldProbe = workspace.role == .library || workspace.pipeline.probeVideos
         guard shouldProbe else { return }
 
-        // 在 MainActor 上快照 Sendable 字段；后台只做 ffprobe，不可跨域读 SwiftData 模型。
         let jobs: [VideoProbeJob] = movieNodes.compactMap { node in
-            let url = folderURL.appendingPathComponent(node.relativePath)
+            let url = FileURLResolver.shared.url(for: node)
+                ?? folderURL.appendingPathComponent(node.relativePath)
             guard FileManager.default.fileExists(atPath: url.path) else { return nil }
             return VideoProbeService.job(from: node, url: url)
         }
         guard !jobs.isEmpty else { return }
         let movieNodeIDs = Set(jobs.map(\.nodeID))
+        let pendingCount = jobs.filter { VideoProbeService.needsProbe(job: $0) }.count
+        let wsName = workspace.effectiveName
 
         Task(priority: .utility) {
-            let results = await Task.detached(priority: .utility) {
-                jobs.compactMap { VideoProbeService.runProbe(job: $0) }
+            guard VideoProbeService.isAvailable() else {
+                ActivityLog.shared.append(String(format:
+                    NSLocalizedString("activity.ffprobe.missing.format",
+                        value: "“%@”: install ffmpeg (brew install ffmpeg) to classify videos by resolution, duration, and codec.",
+                        comment: ""),
+                    wsName))
+                ActivityLog.shared.isExpanded = true
+                return
+            }
+
+            if pendingCount > 0 {
+                ActivityLog.shared.append(String(format:
+                    NSLocalizedString("activity.ffprobe.start.format",
+                        value: "Analyzing %lld video(s) in “%@”…", comment: ""),
+                    Int64(pendingCount), wsName))
+                ActivityLog.shared.startProgress(
+                    title: NSLocalizedString("activity.ffprobe.progress",
+                        value: "Analyzing videos…", comment: ""),
+                    total: pendingCount
+                )
+            }
+
+            let progress: FinderTagProgressHandler = { done, total, detail in
+                Task { @MainActor in
+                    ActivityLog.shared.updateProgress(done: done, total: total, detail: detail)
+                }
+            }
+            let batch = await Task.detached(priority: .utility) {
+                VideoProbeService.runProbes(jobs: jobs, progress: progress)
             }.value
+
+            if pendingCount > 0 {
+                ActivityLog.shared.endProgress()
+            }
 
             let present = (try? storeCtx.fetch(FetchDescriptor<FileNode>(
                 predicate: #Predicate<FileNode> { $0.isPresent }
             ))) ?? []
             let nodeByID = Dictionary(uniqueKeysWithValues: present.map { ($0.id, $0) })
 
-            for result in results {
+            for result in batch.results {
                 guard let node = nodeByID[result.nodeID] else { continue }
                 VideoProbeService.applyProbeResult(
                     to: node, metaJSON: result.metaJSON, probeKey: result.probeKey
@@ -389,6 +422,7 @@ final class FileIndexer {
             let ruleByName = Dictionary(uniqueKeysWithValues: rules.map { ($0.name, $0) })
             for id in movieNodeIDs {
                 guard let node = nodeByID[id] else { continue }
+                node.rulesEvaluatedAt = nil
                 applyRulesInline(to: node, rules: rules, ruleByName: ruleByName, ctx: storeCtx)
             }
 
@@ -397,10 +431,19 @@ final class FileIndexer {
             workspace.scanGeneration &+= 1
             try? storeCtx.save()
             try? catalogCtx.save()
-            ActivityLog.shared.append(String(format:
+
+            var doneNote = String(format:
                 NSLocalizedString("activity.ffprobe.done.format",
-                    value: "ffprobe “%@”: %lld videos tagged.", comment: ""),
-                workspace.effectiveName, Int64(jobs.count)))
+                    value: "Video metadata indexed for “%@”: %lld file(s).", comment: ""),
+                wsName, Int64(batch.probedCount + batch.skippedCount))
+            if batch.timedOutCount > 0 {
+                doneNote += String(format:
+                    NSLocalizedString("activity.ffprobe.timeouts.format",
+                        value: " %lld timed out.", comment: ""),
+                    Int64(batch.timedOutCount))
+            }
+            ActivityLog.shared.append(doneNote)
+            ActivityLog.shared.isExpanded = true
         }
     }
 

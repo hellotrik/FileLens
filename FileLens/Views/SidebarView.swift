@@ -66,15 +66,9 @@ struct SidebarView: View {
     /// consistent across launches and windows.
     @AppStorage("filelens.showEmptyRules") private var showEmptyRules: Bool = true
 
-    private static let sponsorURL = URL(string: "https://www.lifedever.com")!
-
     var body: some View {
-        VStack(spacing: 0) {
-            sidebarList
-            Divider()
-            supportFooter
-        }
-        .task {
+        sidebarList
+            .task {
             // Refresh the Trash count on appear, then every interval. Cheap
             // (single non-recursive directory listing with hidden files
             // skipped) — the loop ends when this view leaves the hierarchy.
@@ -172,29 +166,6 @@ struct SidebarView: View {
                     comment: ""),
                 TagDisplay.localizedName(rule.name)))
         }
-    }
-
-    // MARK: Support footer
-
-    private var supportFooter: some View {
-        Button {
-            NSWorkspace.shared.open(Self.sponsorURL)
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: "heart.fill")
-                    .foregroundStyle(.pink)
-                Text("Support FileLens")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())  // entire row, not just the text/icon
-        }
-        .buttonStyle(.plain)
-        .help("Support FileLens")
-        .pointingHandCursor()
     }
 
     // MARK: Helpers

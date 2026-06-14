@@ -25,7 +25,16 @@ struct VideoProbeResult: Sendable {
     let probeKey: String
 }
 
+struct VideoProbeBatchResult: Sendable {
+    let results: [VideoProbeResult]
+    let probedCount: Int
+    let skippedCount: Int
+    let timedOutCount: Int
+}
+
 enum VideoProbeService {
+    /// 并行 ffprobe 上限；网络盘上串行 1000+ 文件会看起来像「索引卡死」。
+    static let defaultProbeConcurrency = 4
     /// 单文件 ffprobe 上限；网络盘或损坏文件否则会一直卡住。
     static let defaultProbeTimeout: TimeInterval = 45
 
@@ -109,7 +118,71 @@ enum VideoProbeService {
 
     static func needsProbe(job: VideoProbeJob) -> Bool {
         let key = VideoMetaCoding.probeKey(size: job.size, modified: job.dateModified)
-        return job.existingProbeKey != key || job.existingMetaJSON.isEmpty
+        if job.existingProbeKey != key { return true }
+        if job.existingMetaJSON.isEmpty { return true }
+        guard let meta = VideoMetaCoding.decode(job.existingMetaJSON) else { return true }
+        // 仅有 mtime 兜底、没有分辨率/时长/编码的缓存视为未完成探针。
+        return !metaHasProbeData(meta)
+    }
+
+    static func metaHasProbeData(_ meta: VideoMeta) -> Bool {
+        meta.width != nil || meta.height != nil || meta.codec != nil || meta.durationSecs != nil
+    }
+
+    static func runProbes(
+        jobs: [VideoProbeJob],
+        maxConcurrent: Int = defaultProbeConcurrency,
+        progress: FinderTagProgressHandler? = nil
+    ) -> VideoProbeBatchResult {
+        let pending = jobs.filter { needsProbe(job: $0) }
+        let skippedCount = jobs.count - pending.count
+        guard !pending.isEmpty else {
+            progress?(0, 0, nil)
+            return VideoProbeBatchResult(results: [], probedCount: 0, skippedCount: skippedCount, timedOutCount: 0)
+        }
+
+        var results: [VideoProbeResult] = []
+        results.reserveCapacity(pending.count)
+        var timedOutCount = 0
+        let lock = NSLock()
+        var done = 0
+        let total = pending.count
+        let workers = max(1, min(maxConcurrent, total))
+        let group = DispatchGroup()
+        let semaphore = DispatchSemaphore(value: workers)
+
+        for job in pending {
+            group.enter()
+            DispatchQueue.global(qos: .utility).async {
+                defer {
+                    semaphore.signal()
+                    group.leave()
+                }
+                semaphore.wait()
+                let key = VideoMetaCoding.probeKey(size: job.size, modified: job.dateModified)
+                let status = probeWithStatus(at: job.url)
+                let result = VideoProbeResult(
+                    nodeID: job.nodeID,
+                    metaJSON: VideoMetaCoding.encode(status.meta),
+                    probeKey: key
+                )
+                lock.lock()
+                results.append(result)
+                if status.timedOut { timedOutCount += 1 }
+                done += 1
+                let snapshot = done
+                let detail = job.url.lastPathComponent
+                lock.unlock()
+                progress?(snapshot, total, detail)
+            }
+        }
+        group.wait()
+        return VideoProbeBatchResult(
+            results: results,
+            probedCount: pending.count,
+            skippedCount: skippedCount,
+            timedOutCount: timedOutCount
+        )
     }
 
     /// 仅写回探针结果；调用方须在持有该 `FileNode` 的 `ModelContext` 所在 actor 上执行。
@@ -138,10 +211,7 @@ enum VideoProbeService {
     }
 
     static func runProbe(job: VideoProbeJob) -> VideoProbeResult? {
-        guard needsProbe(job: job) else { return nil }
-        let key = VideoMetaCoding.probeKey(size: job.size, modified: job.dateModified)
-        let meta = probe(at: job.url)
-        return VideoProbeResult(nodeID: job.nodeID, metaJSON: VideoMetaCoding.encode(meta), probeKey: key)
+        runProbes(jobs: [job]).results.first
     }
 
     // MARK: - JSON parse
