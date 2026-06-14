@@ -38,6 +38,7 @@
 		49B29D30B5B16299021381A8 /* VideoScanWalker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7460175EE11D473642E2FB7 /* VideoScanWalker.swift */; };
 		4A13DC334C4554C920BBADB9 /* FileGridView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BDFC79CD7F350521E290383 /* FileGridView.swift */; };
 		4C1D3E2F5A6B7C8D9E0F1A2B /* FileListQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D0E1F2A3B4C5D6E7F8091A2 /* FileListQuery.swift */; };
+		7E8F9A0B1C2D3E4F5A6B7C8D /* FileListLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F0A1B2C3D4E5F6A7B8C9D0E1 /* FileListLoader.swift */; };
 		4BBE6CA50FB57D057625BEE2 /* FileIconCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CE261FFE47BF24F0CC19AB5 /* FileIconCache.swift */; };
 		4CE8E98DE563B17CF01B0AE7 /* VideoMetaDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 819DF04F7F90E0FA70E60413 /* VideoMetaDisplay.swift */; };
 		506EB9DC155C85EAB7DE8171 /* ActivityDrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2E4B3BA11172F9B9A60A0E1 /* ActivityDrawerView.swift */; };
@@ -172,6 +173,7 @@
 		9B1E79EB800BF7F6A081E690 /* KindClassifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KindClassifierTests.swift; sourceTree = "<group>"; };
 		9BDFC79CD7F350521E290383 /* FileGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileGridView.swift; sourceTree = "<group>"; };
 		8D0E1F2A3B4C5D6E7F8091A2 /* FileListQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileListQuery.swift; sourceTree = "<group>"; };
+		9F0A1B2C3D4E5F6A7B8C9D0E1 /* FileListLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileListLoader.swift; sourceTree = "<group>"; };
 		9D7499DA1E1D36C3B1CF3285 /* UnsupportedPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsupportedPreview.swift; sourceTree = "<group>"; };
 		9E2FF54453E865352A076683 /* StoreMigrationV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreMigrationV2.swift; sourceTree = "<group>"; };
 		9F0F30CB69E8CE7F2F5BA1A2 /* KindDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KindDisplay.swift; sourceTree = "<group>"; };
@@ -249,6 +251,7 @@
 				7CE261FFE47BF24F0CC19AB5 /* FileIconCache.swift */,
 				D512404F714AB5C047E39035 /* FileIndexer.swift */,
 				8D0E1F2A3B4C5D6E7F8091A2 /* FileListQuery.swift */,
+				9F0A1B2C3D4E5F6A7B8C9D0E1 /* FileListLoader.swift */,
 				5F54719CEBE12810F03A1EA0 /* FileURLResolver.swift */,
 				187BD3D76AE04BEFABD59093 /* FinderTagSyncService.swift */,
 				8708E9405532B156A0EBAD32 /* FolderWatcher.swift */,
@@ -558,6 +561,7 @@
 				382B78D383C9FD2DE70DCDD3 /* FileContextMenu.swift in Sources */,
 				4A13DC334C4554C920BBADB9 /* FileGridView.swift in Sources */,
 				4C1D3E2F5A6B7C8D9E0F1A2B /* FileListQuery.swift in Sources */,
+				7E8F9A0B1C2D3E4F5A6B7C8D /* FileListLoader.swift in Sources */,
 				4BBE6CA50FB57D057625BEE2 /* FileIconCache.swift in Sources */,
 				E4CEAF3C49D444C42335A4B3 /* FileIndexer.swift in Sources */,
 				D178594FB848DD18F1559E49 /* FileLensApp.swift in Sources */,

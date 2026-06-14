@@ -57,6 +57,7 @@ struct ContentView: View {
     /// 同 selection / search / file-count 重复 body recompute(inspector toggle、
     /// hover、focus 切换等)直接命中缓存,跳过 filter+sort 链路。
     @State private var filesMemo = FilesMemo()
+    @State private var listLoader = FileListLoader()
     /// 首次启动(没添加任何文件夹)时把 sidebar 隐藏 —— 空状态本身已经有
     /// 选择文件夹的 CTA,左侧空白栏看起来很奇怪。注意这是 *单向* 切换:
     /// 一旦用户加了第一个 workspace 就转 .all,之后用户手动隐藏/显示都
@@ -277,51 +278,44 @@ struct ContentView: View {
         .focusedValue(\.newRuleAction, { newRule() })
         .focusedValue(\.videoToolsAction, { ActivityLog.shared.toggleExpanded() })
         .focusedValue(\.activeWorkspaceName, selectedWorkspace?.name)
+        .task(id: listLoadID) {
+            guard let ws = selectedWorkspace,
+                  let manager = storeManager,
+                  let storeCtx = try? manager.store(for: ws.id).mainContext
+            else {
+                listLoader.reset()
+                return
+            }
+            await listLoader.load(
+                workspace: ws,
+                selection: selection,
+                search: debouncedSearchText,
+                storeCtx: storeCtx,
+                memo: filesMemo
+            )
+        }
+    }
+
+    /// selection / search / scan 变化时触发 `.task` 重载列表。
+    private var listLoadID: String {
+        guard let ws = selectedWorkspace else { return "_" }
+        let sel: String
+        switch selection {
+        case .none:                       sel = "_"
+        case .workspace(let id):          sel = "ws:\(id)"
+        case .tag(_, let name):           sel = "t:\(name)"
+        case .manualTag(_, let name):     sel = "m:\(name)"
+        case .uncategorized(let id):      sel = "u:\(id)"
+        }
+        return "\(ws.id)|\(ws.fileCount)|\(ws.scanGeneration)|\(sel)|\(debouncedSearchText)"
     }
 
     private func filesForCurrentSelection(workspace ws: Workspace) -> [FileSnapshot] {
-        // 多 key cache:同 workspace 里 workspace ↔ 各 tag 来回切第二次起 O(1)。
-        // workspace.fileCount 变化(scan 完成写回)整个 cache 清空。
-        if let cached = filesMemo.get(workspace: ws,
-                                      selection: selection,
-                                      search: debouncedSearchText) {
-            return cached.files
-        }
-
-        guard let manager = storeManager,
-              let storeCtx = try? manager.store(for: ws.id).mainContext else {
-            return []
-        }
-
-        let ruleID = FileListQuery.ruleID(for: selection, rules: ws.rules)
-        let result = FileListQuery.fetchSync(
-            storeCtx: storeCtx,
-            selection: selection,
-            ruleID: ruleID,
-            search: debouncedSearchText
-        )
-
-        filesMemo.set(workspace: ws,
-                      selection: selection,
-                      search: debouncedSearchText,
-                      entry: cachedEntry(from: result))
-        return result.files
+        listLoader.files
     }
 
     private func tagsForCurrentSelection(workspace ws: Workspace) -> [UUID: [String]] {
-        if let cached = filesMemo.get(workspace: ws,
-                                      selection: selection,
-                                      search: debouncedSearchText) {
-            return cached.tagsByFileID
-        }
-        _ = filesForCurrentSelection(workspace: ws)
-        return filesMemo.get(workspace: ws,
-                             selection: selection,
-                             search: debouncedSearchText)?.tagsByFileID ?? [:]
-    }
-
-    private func cachedEntry(from result: FileListQuery.ListFetchResult) -> FilesMemo.CacheEntry {
-        FilesMemo.CacheEntry(files: result.files, tagsByFileID: result.tagsByFileID)
+        listLoader.tagsByFileID
     }
 
     /// 把 FileSnapshot 列表反查回 FileNode managed objects。点击 / 拖拽 /
@@ -535,7 +529,9 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 ActivityDrawerView()
                 Divider()
-                statusBar(files: files, selectedFiles: selectedSnapshots)
+                statusBar(files: files,
+                          selectedFiles: selectedSnapshots,
+                          isLoading: listLoader.isLoading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -1178,7 +1174,9 @@ struct ContentView: View {
     }
 
     @ViewBuilder
-    private func statusBar(files: [FileSnapshot], selectedFiles: [FileSnapshot]) -> some View {
+    private func statusBar(files: [FileSnapshot],
+                           selectedFiles: [FileSnapshot],
+                           isLoading: Bool) -> some View {
         let bytes: Int64 = (selectedFiles.count > 1 ? selectedFiles : files)
             .reduce(0) { $0 + $1.size }
         let label: String = {
@@ -1188,6 +1186,12 @@ struct ContentView: View {
                         value: "%lld of %lld selected", comment: ""),
                     selectedFiles.count, files.count)
             }
+            if isLoading, !files.isEmpty {
+                return String(format:
+                    NSLocalizedString("status.items.loading.format",
+                        value: "%lld items (loading…)", comment: ""),
+                    files.count)
+            }
             return String(format:
                 NSLocalizedString("status.items.format",
                     value: "%lld items", comment: ""), files.count)
@@ -1196,6 +1200,9 @@ struct ContentView: View {
             Text(verbatim: label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if isLoading {
+                ProgressView().controlSize(.mini)
+            }
             Text(verbatim: "·")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -1314,71 +1321,3 @@ struct ContentView: View {
     }
 }
 
-/// `filesForCurrentSelection` 的 memo 容器。class 引用类型,@State 只持有
-/// 指针 —— 改内部字段不触发 SwiftUI 重 render(只有 @State 指针变了才会),
-/// 适合做不影响视图的纯缓存。
-///
-/// 按 workspace 分桶,每个 workspace 内是 multi-key cache(workspace selection
-/// + 各 tag selection)。版本戳是该 workspace 的 fileCount,scan 完成写回时
-/// 仅清空那一个 workspace 的桶,跨 workspace 切回不重 fetch。
-///
-/// SwiftData FileNode 是 live managed object,silent scan 期间属性原地变,
-/// cache 持有的引用始终是最新值;只有 isPresent 反转(vanished)的 stale 行
-/// 会留在 cache 里 —— 等 fileCount 更新时一并清掉。
-private final class FilesMemo {
-    struct CacheEntry {
-        let files: [FileSnapshot]
-        let tagsByFileID: [UUID: [String]]
-    }
-
-    private struct Bucket {
-        var versionKey: String
-        var entries: [String: CacheEntry]
-    }
-    private var byWorkspace: [UUID: Bucket] = [:]
-
-    func get(workspace ws: Workspace, selection: SidebarSelection?, search: String) -> CacheEntry? {
-        let v = Self.versionKey(ws: ws)
-        guard let bucket = byWorkspace[ws.id], bucket.versionKey == v else {
-            byWorkspace[ws.id] = Bucket(versionKey: v, entries: [:])
-            return nil
-        }
-        let k = Self.selectionKey(selection: selection, search: search)
-        return bucket.entries[k]
-    }
-
-    func set(workspace ws: Workspace, selection: SidebarSelection?, search: String, entry: CacheEntry) {
-        let v = Self.versionKey(ws: ws)
-        var bucket = byWorkspace[ws.id] ?? Bucket(versionKey: v, entries: [:])
-        if bucket.versionKey != v {
-            bucket = Bucket(versionKey: v, entries: [:])
-        }
-        let k = Self.selectionKey(selection: selection, search: search)
-        bucket.entries[k] = entry
-        byWorkspace[ws.id] = bucket
-    }
-
-    private static func versionKey(ws: Workspace) -> String {
-        // 单看 fileCount 在"新增 N + vanished N = 净 0"场景下不变,cache
-        // 永久 stale(Chrome .crdownload → 重命名 走的就是这个 path)。
-        // 联合 scanGeneration(每次完整 scan +1)确保任何一次 scan 完成都
-        // 让 cache 失效一次。
-        "\(ws.fileCount)|\(ws.scanGeneration)"
-    }
-
-    private static func selectionKey(selection: SidebarSelection?, search: String) -> String {
-        let sel: String
-        switch selection {
-        case .none:                       sel = "_"
-        case .workspace(let id):          sel = "ws:\(id)"
-        case .tag(_, let name):           sel = "t:\(name)"
-        case .manualTag(_, let name):     sel = "m:\(name)"
-        case .uncategorized(let id):      sel = "u:\(id)"
-        }
-        return "\(sel)|\(search)"
-    }
-
-    func invalidate() {
-        byWorkspace.removeAll(keepingCapacity: false)
-    }
-}
