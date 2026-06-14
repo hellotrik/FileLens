@@ -21,6 +21,7 @@ ARTIFACTS=(
   .release
   .test-build
   .test-update-build
+  .build
   dist
   build
   DerivedData

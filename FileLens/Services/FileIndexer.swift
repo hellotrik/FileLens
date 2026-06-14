@@ -344,7 +344,7 @@ final class FileIndexer {
         probe("ready", presentNodes.count)
     }
 
-    /// 扫描完成后对视频文件后台 ffprobe（不阻塞 UI 返回）；探针结束后重算视频规则标签。
+    /// 视频库扫描完成后后台 ffprobe（不阻塞 UI）；文件夹角色不调用。
     private func probeVideosIfNeeded(
         workspace: Workspace,
         catalogCtx: ModelContext,
@@ -356,8 +356,8 @@ final class FileIndexer {
             $0.isPresent && ($0.kind == "movie" || VideoExtensions.isVideoExtension($0.ext))
         }
         guard !movieNodes.isEmpty else { return }
-        let shouldProbe = workspace.role == .library || workspace.pipeline.probeVideos
-        guard shouldProbe else { return }
+        // 普通文件夹只做 Finder 式索引 + 规则标签；ffprobe 仅视频库需要。
+        guard workspace.role == .library, workspace.pipeline.probeVideos else { return }
 
         let jobs: [VideoProbeJob] = movieNodes.compactMap { node in
             let url = FileURLResolver.shared.url(for: node)

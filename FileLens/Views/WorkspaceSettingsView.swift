@@ -237,7 +237,7 @@ struct WorkspaceSettingsView: View {
                 }
             }
 
-            if role == .library || role == .watch {
+            if role == .library {
                 Section {
                     Toggle("workspace.settings.pipeline.probeVideos", isOn: $pipeline.probeVideos)
                 } footer: {

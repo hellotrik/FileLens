@@ -1,3 +1,10 @@
+/**
+ * 腾云驾雾
+ *
+ * 腾云飞举、迅行远游（朝游北海暮苍梧）；用于长距离机动与空中行走。
+ *
+ * @remarks 来源：天罡三十六法 · https://baike.baidu.com/item/%E5%A4%A9%E7%BD%A1%E4%B8%89%E5%8D%81%E5%85%AD%E6%B3%95/60754650 · kairos-dao-header
+ */
 import SwiftUI
 import SwiftData
 import AppKit
@@ -26,6 +33,7 @@ struct FileTableView: View {
     /// 列布局(顺序 / 宽度 / 显隐 / 排序)。从 workspace.tableColumnCustomizationJSON
     /// 反序列化(失败回默认),用户交互后写回。
     @State private var layoutState: FileTableLayoutState
+    @State private var rowsCache = FileTableRowsCache()
 
     init(workspace: Workspace,
          files: [FileSnapshot],
@@ -40,11 +48,19 @@ struct FileTableView: View {
         _layoutState = State(initialValue: FileTableLayoutState.decode(workspace.tableColumnCustomizationJSON))
     }
 
+    private var rowsIdentityKey: String {
+        let firstID = files.first?.id.uuidString ?? "_"
+        let lastID = files.last?.id.uuidString ?? "_"
+        return "\(files.count)|\(firstID)|\(lastID)"
+    }
+
     private var rows: [FileTableRow] {
-        let sorted = FileTableSorter.sort(files,
-                                          by: layoutState.sortKey,
-                                          ascending: layoutState.sortAscending)
-        return FileTableRowBuilder.makeRows(sortedFiles: sorted, sortKey: layoutState.sortKey)
+        rowsCache.rows(
+            files: files,
+            identityKey: rowsIdentityKey,
+            sortKey: layoutState.sortKey,
+            ascending: layoutState.sortAscending
+        )
     }
 
     var body: some View {
@@ -826,5 +842,22 @@ private final class FileTableGroupRowView: NSView {
 
     func populate(title: String) {
         label.stringValue = title
+    }
+}
+
+private final class FileTableRowsCache {
+    private var lastKey: String = ""
+    private var lastRows: [FileTableRow] = []
+
+    func rows(files: [FileSnapshot],
+              identityKey: String,
+              sortKey: FileSortKey,
+              ascending: Bool) -> [FileTableRow] {
+        let key = "\(identityKey)|\(sortKey.rawValue)|\(ascending)"
+        if key == lastKey { return lastRows }
+        let sorted = FileTableSorter.sort(files, by: sortKey, ascending: ascending)
+        lastRows = FileTableRowBuilder.makeRows(sortedFiles: sorted, sortKey: sortKey)
+        lastKey = key
+        return lastRows
     }
 }

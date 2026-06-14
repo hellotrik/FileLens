@@ -8,10 +8,18 @@
 import Foundation
 import Combine
 
+extension Notification.Name {
+    /// `object` 为 `Bool`：进度条是否占用 UI（start/end 时发，update 不发）。
+    static let activityProgressActiveChanged = Notification.Name("filelens.activityProgressActiveChanged")
+}
+
 /// 主窗口底部 Activity 日志（替代 Video Tools 日志 Tab）。
 @MainActor
 final class ActivityLog: ObservableObject {
     static let shared = ActivityLog()
+
+    /// 进度数值刷新间隔。ffprobe 每文件回调一次，不节流会把 ContentView 绑死。
+    private static let progressThrottle: Duration = .milliseconds(150)
 
     struct Entry: Identifiable, Equatable {
         let id = UUID()
@@ -28,30 +36,70 @@ final class ActivityLog: ObservableObject {
     @Published private(set) var isProgressActive: Bool = false
 
     private let maxEntries = 200
+    private var pendingProgress: (done: Int, total: Int?, title: String?, detail: String?)?
+    private var progressFlushTask: Task<Void, Never>?
 
     private init() {}
 
     func startProgress(title: String, total: Int) {
+        cancelProgressFlush()
         progressTitle = title
         progressTotal = max(total, 1)
         progressDone = 0
+        progressDetail = nil
         isProgressActive = true
         isExpanded = true
+        postProgressActive(true)
     }
 
     func updateProgress(done: Int, total: Int? = nil, title: String? = nil, detail: String? = nil) {
-        progressDone = done
-        if let total { progressTotal = max(total, 1) }
-        if let title { progressTitle = title }
-        if let detail { progressDetail = detail }
+        pendingProgress = (done, total, title, detail)
+        guard progressFlushTask == nil else { return }
+        progressFlushTask = Task { @MainActor in
+            try? await Task.sleep(for: Self.progressThrottle)
+            guard !Task.isCancelled else { return }
+            flushPendingProgress()
+        }
     }
 
     func endProgress() {
+        cancelProgressFlush()
+        if let pending = pendingProgress {
+            applyProgress(pending)
+            pendingProgress = nil
+        }
         isProgressActive = false
         progressTitle = nil
         progressDetail = nil
         progressDone = 0
         progressTotal = 0
+        postProgressActive(false)
+    }
+
+    private func cancelProgressFlush() {
+        progressFlushTask?.cancel()
+        progressFlushTask = nil
+    }
+
+    private func flushPendingProgress() {
+        progressFlushTask = nil
+        guard let pending = pendingProgress else { return }
+        pendingProgress = nil
+        applyProgress(pending)
+    }
+
+    private func applyProgress(_ pending: (done: Int, total: Int?, title: String?, detail: String?)) {
+        progressDone = pending.done
+        if let total = pending.total { progressTotal = max(total, 1) }
+        if let title = pending.title { progressTitle = title }
+        if let detail = pending.detail { progressDetail = detail }
+    }
+
+    private func postProgressActive(_ active: Bool) {
+        NotificationCenter.default.post(
+            name: .activityProgressActiveChanged,
+            object: active
+        )
     }
 
     func append(_ message: String) {

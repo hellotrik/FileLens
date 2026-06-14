@@ -60,7 +60,7 @@ struct WorkspacePipelineConfig: Codable, Equatable {
     var organizeMethod: String = VideoSettings.defaultOrganizeMethod
     var enabledRuleKeys: [String] = VideoSettings.defaultRuleKeys
     var renameOptions: VideoRenameOptions = .default
-    /// library / watch 是否在索引后 ffprobe。
+    /// 仅视频库索引后是否 ffprobe；文件夹（watch）角色索引时不做视频分析。
     var probeVideos: Bool = true
 
     static let `default` = WorkspacePipelineConfig()

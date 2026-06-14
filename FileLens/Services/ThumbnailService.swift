@@ -1,3 +1,11 @@
+/**
+ * 纯梦求真分身
+ *
+ * 梦里轻烟天外客，夜夜梦中唤心魂。
+ * 纵是百年无缘分，解脱俗尘梦纯真。
+ *
+ * @remarks 来源：蛊真人 · 《蛊真人》全诗词整理（完整版） · kairos-dao-header
+ */
 import Foundation
 import AppKit
 import QuickLookThumbnailing
@@ -20,6 +28,10 @@ actor ThumbnailService {
     nonisolated private let cacheDir: URL
     /// inflight key 含 size,避免同 URL 不同档位的请求互相等待错档结果。
     private var inflight: [String: Task<NSImage?, Never>] = [:]
+    /// QL 生成并发上限。Grid 快滚 + ffprobe 同时跑时,无上限会把网络盘 I/O 打满。
+    private static let maxConcurrentGenerations = 6
+    private var activeGenerations = 0
+    private var generationWaiters: [CheckedContinuation<Void, Never>] = []
 
     init() {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.lifedever.FileLens"
@@ -37,6 +49,8 @@ actor ThumbnailService {
             if let data = try? Data(contentsOf: cached), let img = NSImage(data: data) {
                 return img
             }
+            await self.acquireGenerationSlot()
+            defer { self.releaseGenerationSlot() }
             return await self.generate(url: url, size: size, cacheTo: cached)
         }
         inflight[key] = task
@@ -73,6 +87,24 @@ actor ThumbnailService {
 
     private func inflightKey(url: URL, size: CGSize) -> String {
         "\(url.path)|\(Int(size.width))x\(Int(size.height))"
+    }
+
+    private func acquireGenerationSlot() async {
+        if activeGenerations < Self.maxConcurrentGenerations {
+            activeGenerations += 1
+            return
+        }
+        await withCheckedContinuation { continuation in
+            generationWaiters.append(continuation)
+        }
+        activeGenerations += 1
+    }
+
+    private func releaseGenerationSlot() {
+        activeGenerations -= 1
+        if !generationWaiters.isEmpty {
+            generationWaiters.removeFirst().resume()
+        }
     }
 
     private func generate(url: URL, size: CGSize, cacheTo: URL) async -> NSImage? {

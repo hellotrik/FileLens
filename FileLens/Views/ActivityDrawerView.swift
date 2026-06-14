@@ -109,3 +109,21 @@ struct ActivityDrawerView: View {
         DateFormatter.localizedString(from: date, dateStyle: .none, timeStyle: .medium)
     }
 }
+
+/// 工具栏进度条。单独订阅 ActivityLog,避免 ffprobe 进度刷新整页 ContentView。
+struct ActivityToolbarProgressView: View {
+    @ObservedObject private var log = ActivityLog.shared
+
+    var body: some View {
+        if log.isProgressActive {
+            ProgressView(
+                value: log.progressTotal > 0
+                    ? Double(log.progressDone) / Double(log.progressTotal)
+                    : nil
+            )
+            .controlSize(.small)
+            .frame(width: 64)
+            .help(log.progressTitle ?? "")
+        }
+    }
+}
