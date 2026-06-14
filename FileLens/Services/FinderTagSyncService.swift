@@ -9,7 +9,7 @@ import Foundation
 import SwiftData
 
 struct FinderTagSyncReport {
-    var tagged = 0
+    var affected = 0
     var skippedNoTags = 0
     var failures: [(String, String)] = []
 }
@@ -67,9 +67,36 @@ enum FinderTagSyncService {
             }
             do {
                 try FinderTagWriter.mergeTags(into: job.url, entries: entries)
-                report.tagged += 1
+                report.affected += 1
             } catch {
                 report.failures.append((job.url.lastPathComponent, error.localizedDescription))
+            }
+        }
+        return report
+    }
+
+    @MainActor
+    static func buildClearJobs(nodes: [FileNode]) -> [URL] {
+        nodes.compactMap { node in
+            guard node.isPresent,
+                  let url = FileActions.url(for: node),
+                  FileManager.default.fileExists(atPath: url.path) else { return nil }
+            return url
+        }
+    }
+
+    static func runClear(urls: [URL]) -> FinderTagSyncReport {
+        var report = FinderTagSyncReport()
+        for url in urls {
+            guard FinderTagWriter.hasTags(at: url) else {
+                report.skippedNoTags += 1
+                continue
+            }
+            do {
+                try FinderTagWriter.clearTags(at: url)
+                report.affected += 1
+            } catch {
+                report.failures.append((url.lastPathComponent, error.localizedDescription))
             }
         }
         return report

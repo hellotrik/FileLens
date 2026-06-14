@@ -67,6 +67,18 @@ enum TagService {
         }
     }
 
+    /// 移除自动规则匹配的标签（`source == "rule"`）。
+    static func removeRuleTags(from files: [FileNode], names: Set<String>, context: ModelContext) {
+        guard !files.isEmpty, !names.isEmpty else { return }
+        for file in files {
+            let toRemove = file.tags.filter { $0.source == "rule" && names.contains($0.name) }
+            for tag in toRemove {
+                context.delete(tag)
+                file.tags.removeAll { $0.id == tag.id }
+            }
+        }
+    }
+
     static func fileHasRuleTag(_ file: FileNode) -> Bool {
         file.tags.contains { $0.source == "rule" || $0.source == "pinned" }
     }

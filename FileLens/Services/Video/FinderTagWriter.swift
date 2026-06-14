@@ -79,6 +79,20 @@ enum FinderTagWriter {
         return arr
     }
 
+    static func hasTags(at url: URL) -> Bool {
+        !readExistingTags(at: url).isEmpty
+    }
+
+    /// 移除 macOS Finder 彩色标签（`com.apple.metadata:_kMDItemUserTags`）。
+    static func clearTags(at url: URL) throws {
+        let rc = removexattr(url.path, xattrName, 0)
+        if rc == 0 { return }
+        if errno == ENOATTR { return }
+        throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno), userInfo: [
+            NSLocalizedDescriptionKey: "removexattr 失败: \(url.path)"
+        ])
+    }
+
     private static func setXattr(path: String, name: String, data: Data) throws {
         let rc = data.withUnsafeBytes { buf in
             setxattr(path, name, buf.baseAddress, data.count, 0, 0)

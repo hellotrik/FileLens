@@ -98,6 +98,19 @@ final class TagServiceTests: XCTestCase {
         XCTAssertEqual(file.tags.map(\.name), ["Legacy"])
     }
 
+    func test_removeRuleTags_by_name() throws {
+        let file = makeFile()
+        context.insert(file)
+        let ruleTag = FileTag(name: "PDF", source: "rule", ruleID: UUID())
+        ruleTag.file = file
+        context.insert(ruleTag)
+        file.tags = [ruleTag]
+        _ = TagService.addManualTag(name: "Legacy", to: [file], context: context)
+
+        TagService.removeRuleTags(from: [file], names: ["PDF"], context: context)
+        XCTAssertEqual(file.tags.map(\.name), ["Legacy"])
+    }
+
     func test_computeStatistics_counts_manual_and_uncategorized() throws {
         let a = makeFile(name: "a.txt")
         let b = makeFile(name: "b.txt")

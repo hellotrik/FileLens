@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		07491216A1DADF7A13F557F7 /* StoreMigrationV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E2FF54453E865352A076683 /* StoreMigrationV2.swift */; };
+		0CB88D0190E08A2F47F8F384 /* VideoFinderTagSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51D925A8C752A74EB513E9CA /* VideoFinderTagSyncService.swift */; };
 		0D10997452F00B1B358DF73A /* Condition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1510856F65B2DAA3CF91E5A6 /* Condition.swift */; };
 		0DF93577F854A421F8EBC0A4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8437296A7FAD343066127C37 /* Assets.xcassets */; };
 		0E701BF6DFB269E432FB2628 /* ActivityLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A1729B94CB8B8AF30AB2A6A /* ActivityLog.swift */; };
@@ -49,7 +50,6 @@
 		611CF6A7F09A7C85F3E424F9 /* FinderSmartFolderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E59711ACCD29D565A12EEAD /* FinderSmartFolderService.swift */; };
 		634BA646758DCC9EA0AC3887 /* StoreMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 155A6BAEA16D45D6A694F583 /* StoreMigrationTests.swift */; };
 		64BB924545EC9CB42D0B24B5 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CAA54EFF677ED6497E10C6E /* SidebarView.swift */; };
-		659A79C1654F203F587A20D6 /* TagMenuBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB78878FF12F912139CF83AC /* TagMenuBridge.swift */; };
 		65D13695F3D58CF1E1AA4B94 /* VideoMeta.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C360A19F4ACD1C56B1A0D5 /* VideoMeta.swift */; };
 		684DDF7F51F3482D805C34E0 /* PipelineOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7CC2F3B4D7C826D86785B66 /* PipelineOperation.swift */; };
 		6C3CE9BCEC6BC3DCBC68E2FB /* FileIndexerTests.swift.disabled in Resources */ = {isa = PBXBuildFile; fileRef = 25909E3BE4658127DC971DED /* FileIndexerTests.swift.disabled */; };
@@ -72,7 +72,6 @@
 		9851809C6BED992DC9CDBFE4 /* DragSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F679AE064CF5F1536F492CA9 /* DragSession.swift */; };
 		98627D18688AB769B8E19C66 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1332BC41161C697626E96D21 /* AppDelegate.swift */; };
 		9AFB44E60CDEFCA109433D87 /* CursorModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1CBF2EBC0BC77326091DEB /* CursorModifier.swift */; };
-		9C4D68EB8F9CBCAA32AD6FCB /* RuleTagPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 416928E2B9E4BE288043F301 /* RuleTagPickerSheet.swift */; };
 		9CE00AA429D40322D32B97E1 /* FileActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE16EA8F33244232D877BD8 /* FileActions.swift */; };
 		A2F4C3BE46B4561CD3ED926C /* ConditionEvaluatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE4BE5D538DBF09A954ADBE7 /* ConditionEvaluatorTests.swift */; };
 		A75A67CD151F61F8D9DE1690 /* KindClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3056F15ECF7AD4765009315 /* KindClassifier.swift */; };
@@ -82,6 +81,7 @@
 		AD0F3FDCF2E09DF1BCA9677F /* VideoExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01ADBD8847565700770570C /* VideoExtensions.swift */; };
 		AD19DCBE9F9AA64562309D51 /* FolderWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8708E9405532B156A0EBAD32 /* FolderWatcher.swift */; };
 		AF533D374D8DE6F77F83E887 /* KindDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F0F30CB69E8CE7F2F5BA1A2 /* KindDisplay.swift */; };
+		B31538FE66265A9B016768D9 /* RuleTagPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8ADDAE8DE44921BEEF14E9D4 /* RuleTagPickerSheet.swift */; };
 		B3AE2A3D7BE157A3AF20F116 /* UnsupportedPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D7499DA1E1D36C3B1CF3285 /* UnsupportedPreview.swift */; };
 		B3FABADE094A0DAB8751E53E /* ThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AC448360C870672CEE5E20A /* ThumbnailService.swift */; };
 		B8963B377E8BC946E90A83B3 /* TagDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B74B74F30C5CE1723296EDE7 /* TagDisplay.swift */; };
@@ -105,8 +105,8 @@
 		F090A71C8D9ED6D527B6ACC7 /* ConditionEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B799D07B0CA5F7C128D52050 /* ConditionEvaluator.swift */; };
 		F1900CADCDF077FABDB06686 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 916AD25C5BE879DF69AE58DE /* EmptyStateView.swift */; };
 		F5185636BC5E6225C9A51266 /* VideoProbeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAF2AC865EE658A9F893A604 /* VideoProbeService.swift */; };
+		F8BF018C565C95FBB2492B79 /* FinderTagSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 187BD3D76AE04BEFABD59093 /* FinderTagSyncService.swift */; };
 		F9F4ED901FD9AC32EB430BC6 /* RuleNameMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A6EE5ECCA3636AC3AA6BF6 /* RuleNameMigration.swift */; };
-		FND00001SYNC000000000001 /* FinderTagSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FND00002SYNC000000000002 /* FinderTagSyncService.swift */; };
 		FBA078874CF2D5CC822DF503 /* VideoOrganizeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA370672EDF4411BDFFB8256 /* VideoOrganizeService.swift */; };
 /* End PBXBuildFile section */
 
@@ -125,6 +125,7 @@
 		1332BC41161C697626E96D21 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		1510856F65B2DAA3CF91E5A6 /* Condition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Condition.swift; sourceTree = "<group>"; };
 		155A6BAEA16D45D6A694F583 /* StoreMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreMigrationTests.swift; sourceTree = "<group>"; };
+		187BD3D76AE04BEFABD59093 /* FinderTagSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderTagSyncService.swift; sourceTree = "<group>"; };
 		1A1729B94CB8B8AF30AB2A6A /* ActivityLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityLog.swift; sourceTree = "<group>"; };
 		1AC448360C870672CEE5E20A /* ThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailService.swift; sourceTree = "<group>"; };
 		1E59711ACCD29D565A12EEAD /* FinderSmartFolderService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderSmartFolderService.swift; sourceTree = "<group>"; };
@@ -138,12 +139,12 @@
 		3A3EA88AD459C7B461D0CBDB /* DateBucket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateBucket.swift; sourceTree = "<group>"; };
 		3B17FC436F06F9B0356C4BD8 /* ImagePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePreview.swift; sourceTree = "<group>"; };
 		3F329BF8D3B562FA83727A51 /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
-		416928E2B9E4BE288043F301 /* RuleTagPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleTagPickerSheet.swift; sourceTree = "<group>"; };
 		43A6EE5ECCA3636AC3AA6BF6 /* RuleNameMigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleNameMigration.swift; sourceTree = "<group>"; };
 		44027E634235E1AD69EB2545 /* BookmarkStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkStoreTests.swift; sourceTree = "<group>"; };
 		44E75E7BFADBB610FFBADE45 /* StoreMigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreMigration.swift; sourceTree = "<group>"; };
 		4531B1E32EE72D065BD454E8 /* VideoConfigImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoConfigImporter.swift; sourceTree = "<group>"; };
 		50BA494FE9DF215ED4759FB8 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		51D925A8C752A74EB513E9CA /* VideoFinderTagSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFinderTagSyncService.swift; sourceTree = "<group>"; };
 		57FC96CE6EB7EA1592EC8277 /* Workspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workspace.swift; sourceTree = "<group>"; };
 		59C360A19F4ACD1C56B1A0D5 /* VideoMeta.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoMeta.swift; sourceTree = "<group>"; };
 		5CAA54EFF677ED6497E10C6E /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
@@ -152,7 +153,6 @@
 		61079B3D84C5E672AD319E0C /* QuickLookPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLookPreview.swift; sourceTree = "<group>"; };
 		62EB61D9B058BC9DE1333E45 /* VideoCollectService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCollectService.swift; sourceTree = "<group>"; };
 		63738735992374454DFFD965 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
-		FND00002SYNC000000000002 /* FinderTagSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderTagSyncService.swift; sourceTree = "<group>"; };
 		64CD4D5F370E300FF7435CFA /* TagService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagService.swift; sourceTree = "<group>"; };
 		66A147E9B1C7969B49E9F90B /* CommandPaletteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPaletteView.swift; sourceTree = "<group>"; };
 		6809B84FD4ECE32202A026DE /* RuleEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleEngineTests.swift; sourceTree = "<group>"; };
@@ -169,6 +169,7 @@
 		8708E9405532B156A0EBAD32 /* FolderWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FolderWatcher.swift; sourceTree = "<group>"; };
 		884CC960214CF4549DDC5372 /* VideoRenameService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoRenameService.swift; sourceTree = "<group>"; };
 		89DE2779084BBD988881237F /* FileNodePredicateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileNodePredicateTests.swift; sourceTree = "<group>"; };
+		8ADDAE8DE44921BEEF14E9D4 /* RuleTagPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleTagPickerSheet.swift; sourceTree = "<group>"; };
 		8AEB13FCE438EAB13CF95CFF /* BuiltInRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuiltInRulesTests.swift; sourceTree = "<group>"; };
 		8D7A0BFE992B5F83F31A80ED /* VideoClassification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoClassification.swift; sourceTree = "<group>"; };
 		916AD25C5BE879DF69AE58DE /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
@@ -202,7 +203,6 @@
 		C5D34978AB0F53933A90FDC7 /* FinderTagWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderTagWriter.swift; sourceTree = "<group>"; };
 		CAF2AC865EE658A9F893A604 /* VideoProbeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProbeService.swift; sourceTree = "<group>"; };
 		CB1CBF2EBC0BC77326091DEB /* CursorModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorModifier.swift; sourceTree = "<group>"; };
-		CB78878FF12F912139CF83AC /* TagMenuBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagMenuBridge.swift; sourceTree = "<group>"; };
 		D01ADBD8847565700770570C /* VideoExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExtensions.swift; sourceTree = "<group>"; };
 		D22D01D76B59F417B0AE0BE2 /* PipelineOperationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineOperationSheet.swift; sourceTree = "<group>"; };
 		D48E7EADEAB9ABA7C2091725 /* FileActionRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileActionRegistry.swift; sourceTree = "<group>"; };
@@ -257,6 +257,7 @@
 				7CE261FFE47BF24F0CC19AB5 /* FileIconCache.swift */,
 				D512404F714AB5C047E39035 /* FileIndexer.swift */,
 				5F54719CEBE12810F03A1EA0 /* FileURLResolver.swift */,
+				187BD3D76AE04BEFABD59093 /* FinderTagSyncService.swift */,
 				8708E9405532B156A0EBAD32 /* FolderWatcher.swift */,
 				E5D0595257F22543299FBC3B /* GlobalShortcuts.swift */,
 				E3056F15ECF7AD4765009315 /* KindClassifier.swift */,
@@ -267,8 +268,6 @@
 				44E75E7BFADBB610FFBADE45 /* StoreMigration.swift */,
 				9E2FF54453E865352A076683 /* StoreMigrationV2.swift */,
 				B74B74F30C5CE1723296EDE7 /* TagDisplay.swift */,
-				CB78878FF12F912139CF83AC /* TagMenuBridge.swift */,
-				FND00002SYNC000000000002 /* FinderTagSyncService.swift */,
 				64CD4D5F370E300FF7435CFA /* TagService.swift */,
 				1AC448360C870672CEE5E20A /* ThumbnailService.swift */,
 				D6C83B647598B4954994899F /* Toast.swift */,
@@ -385,9 +384,9 @@
 				D6D7449A803044E4695A562D /* InspectorView.swift */,
 				D22D01D76B59F417B0AE0BE2 /* PipelineOperationSheet.swift */,
 				3153193915FCBA0517AF4887 /* RuleEditorView.swift */,
+				8ADDAE8DE44921BEEF14E9D4 /* RuleTagPickerSheet.swift */,
 				50BA494FE9DF215ED4759FB8 /* SettingsView.swift */,
 				5CAA54EFF677ED6497E10C6E /* SidebarView.swift */,
-				416928E2B9E4BE288043F301 /* RuleTagPickerSheet.swift */,
 				9E6DBD019B713552D041AF2D /* UpdateDialogView.swift */,
 				69A304FAECAF836E95C327BA /* VideoSettingsTab.swift */,
 				9B0F286A405BF1E290B6FAE6 /* VideoSetupSheet.swift */,
@@ -407,6 +406,7 @@
 				62EB61D9B058BC9DE1333E45 /* VideoCollectService.swift */,
 				4531B1E32EE72D065BD454E8 /* VideoConfigImporter.swift */,
 				D01ADBD8847565700770570C /* VideoExtensions.swift */,
+				51D925A8C752A74EB513E9CA /* VideoFinderTagSyncService.swift */,
 				59C360A19F4ACD1C56B1A0D5 /* VideoMeta.swift */,
 				819DF04F7F90E0FA70E60413 /* VideoMetaDisplay.swift */,
 				AA370672EDF4411BDFFB8256 /* VideoOrganizeService.swift */,
@@ -578,6 +578,7 @@
 				5A911C248FF0B771FCCEAF3A /* FileThumbnail.swift in Sources */,
 				EBFFF35103B793731B8B7D34 /* FileURLResolver.swift in Sources */,
 				611CF6A7F09A7C85F3E424F9 /* FinderSmartFolderService.swift in Sources */,
+				F8BF018C565C95FBB2492B79 /* FinderTagSyncService.swift in Sources */,
 				D273B4552122F8F24C9FB7D2 /* FinderTagWriter.swift in Sources */,
 				DBB9CA0E93E04B970FCCC733 /* FirstRunRulePicker.swift in Sources */,
 				AD19DCBE9F9AA64562309D51 /* FolderWatcher.swift in Sources */,
@@ -595,14 +596,12 @@
 				1B45C965EDEFC84DB5F55369 /* RuleEditorView.swift in Sources */,
 				7ADD9E1B0CE9222D4E420415 /* RuleEngine.swift in Sources */,
 				F9F4ED901FD9AC32EB430BC6 /* RuleNameMigration.swift in Sources */,
+				B31538FE66265A9B016768D9 /* RuleTagPickerSheet.swift in Sources */,
 				E040CF68070AD71791C00E18 /* SettingsView.swift in Sources */,
 				64BB924545EC9CB42D0B24B5 /* SidebarView.swift in Sources */,
 				35DAAE680BD7C5AC076D0672 /* StoreMigration.swift in Sources */,
 				07491216A1DADF7A13F557F7 /* StoreMigrationV2.swift in Sources */,
 				B8963B377E8BC946E90A83B3 /* TagDisplay.swift in Sources */,
-				9C4D68EB8F9CBCAA32AD6FCB /* RuleTagPickerSheet.swift in Sources */,
-				659A79C1654F203F587A20D6 /* TagMenuBridge.swift in Sources */,
-				FND00001SYNC000000000001 /* FinderTagSyncService.swift in Sources */,
 				5BAAF6AAE09E73A8A84624C2 /* TagService.swift in Sources */,
 				B3FABADE094A0DAB8751E53E /* ThumbnailService.swift in Sources */,
 				751E64C7F0908F5C0AAEF373 /* Toast.swift in Sources */,
@@ -615,6 +614,7 @@
 				3175CB75E9C461608DF6C5E9 /* VideoCollectService.swift in Sources */,
 				3B2AEE442B50D09DA915DB8E /* VideoConfigImporter.swift in Sources */,
 				AD0F3FDCF2E09DF1BCA9677F /* VideoExtensions.swift in Sources */,
+				0CB88D0190E08A2F47F8F384 /* VideoFinderTagSyncService.swift in Sources */,
 				65D13695F3D58CF1E1AA4B94 /* VideoMeta.swift in Sources */,
 				4CE8E98DE563B17CF01B0AE7 /* VideoMetaDisplay.swift in Sources */,
 				FBA078874CF2D5CC822DF503 /* VideoOrganizeService.swift in Sources */,

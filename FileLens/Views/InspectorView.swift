@@ -33,7 +33,6 @@ struct InspectorSnapshot {
         let colorHex: String
         let isPinned: Bool
         let isManual: Bool
-        var isRemovable: Bool { isPinned || isManual }
     }
 
     let id: UUID
@@ -197,12 +196,7 @@ struct InspectorView: View {
         if s.tags.isEmpty {
             Text("No tags").foregroundStyle(.tertiary).font(.caption)
         } else {
-            FlowTags(tags: s.tags) { tag in
-                guard tag.isRemovable, selectedFiles.count == 1, let file = selectedFiles.first else { return }
-                if tag.isPinned {
-                    TagMenuBridge.onRemovePinnedTag?(file, tag.name)
-                }
-            }
+            FlowTags(tags: s.tags)
         }
     }
 
@@ -329,32 +323,19 @@ private struct InspectorActionButton: View {
 
 private struct FlowTags: View {
     let tags: [InspectorSnapshot.TagInfo]
-    var onRemove: ((InspectorSnapshot.TagInfo) -> Void)?
 
     var body: some View {
         FlowLayout(spacing: 6) {
             ForEach(tags, id: \.self) { tag in
-                HStack(spacing: 4) {
-                    HStack(spacing: 5) {
-                        Circle()
-                            .fill(Color(hexString: tag.colorHex))
-                            .overlay(
-                                Circle().stroke(Color.primary.opacity(0.10), lineWidth: 0.5)
-                            )
-                            .frame(width: 8, height: 8)
-                        Text(verbatim: TagDisplay.localizedName(tag.name))
-                            .font(.caption)
-                    }
-                    if tag.isRemovable, let onRemove {
-                        Button {
-                            onRemove(tag)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(Color(hexString: tag.colorHex))
+                        .overlay(
+                            Circle().stroke(Color.primary.opacity(0.10), lineWidth: 0.5)
+                        )
+                        .frame(width: 8, height: 8)
+                    Text(verbatim: TagDisplay.localizedName(tag.name))
+                        .font(.caption)
                 }
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(Color.secondary.opacity(0.10), in: Capsule())

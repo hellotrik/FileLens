@@ -237,7 +237,6 @@ struct ContentView: View {
             if coordinator == nil, let manager = storeManager {
                 coordinator = WorkspaceCoordinator(storeManager: manager)
             }
-            installTagMenuBridge()
         }
         .onChange(of: selectedWorkspace) { _, ws in
             Task {
@@ -470,12 +469,6 @@ struct ContentView: View {
         return try? manager.store(for: ws.id).mainContext
     }
 
-    private func installTagMenuBridge() {
-        TagMenuBridge.onRemovePinnedTag = { file, name in
-            removePinnedTag(name, from: file)
-        }
-    }
-
     private func reapplyRules(to files: [FileNode]) {
         guard let ws = selectedWorkspace,
               let manager = storeManager else { return }
@@ -487,51 +480,6 @@ struct ContentView: View {
                 NSLocalizedString("tag.toast.rulesReapplied",
                     value: "Rules re-applied", comment: "")
             )
-        } catch {
-            ToastCenter.shared.error(error.localizedDescription)
-        }
-    }
-
-    private func clearRuleTags(from files: [FileNode]) {
-        guard let ws = selectedWorkspace,
-              let storeCtx = workspaceStoreContext(for: ws) else { return }
-        TagService.clearRuleTags(from: files, context: storeCtx)
-        persistTagChanges(workspace: ws, storeCtx: storeCtx)
-        ToastCenter.shared.info(
-            NSLocalizedString("tag.toast.rulesCleared", value: "Rule tags cleared", comment: "")
-        )
-    }
-
-    private func clearAllTags(from files: [FileNode]) {
-        guard let ws = selectedWorkspace,
-              let manager = storeManager,
-              let storeCtx = workspaceStoreContext(for: ws) else { return }
-        TagService.removeAllTags(from: files, context: storeCtx)
-        do {
-            try storeCtx.save()
-            let indexer = FileIndexer(storeManager: manager)
-            try indexer.applyRules(to: files, workspaceID: ws.id)
-            filesMemo.invalidate()
-            ToastCenter.shared.info(
-                NSLocalizedString("tag.toast.allCleared", value: "All tags cleared", comment: "")
-            )
-        } catch {
-            ToastCenter.shared.error(error.localizedDescription)
-        }
-    }
-
-    private func removePinnedTag(_ name: String, from file: FileNode) {
-        guard let ws = selectedWorkspace,
-              let storeCtx = workspaceStoreContext(for: ws) else { return }
-        TagService.removePinnedTags(from: [file], names: [name], context: storeCtx)
-        persistTagChanges(workspace: ws, storeCtx: storeCtx)
-    }
-
-    private func persistTagChanges(workspace ws: Workspace, storeCtx: ModelContext) {
-        do {
-            try storeCtx.save()
-            try TagService.refreshWorkspaceCounts(workspace: ws, storeCtx: storeCtx, catalogCtx: modelContext)
-            filesMemo.invalidate()
         } catch {
             ToastCenter.shared.error(error.localizedDescription)
         }
@@ -710,6 +658,9 @@ struct ContentView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             if let ws = selectedWorkspace {
                 pipelineToolbarItems(for: ws)
+                if !videoOperationTargets().isEmpty {
+                    videoTagToolbarItems(for: ws)
+                }
                 tagToolbarItems()
             }
             Picker("View", selection: viewMode) {
@@ -741,13 +692,6 @@ struct ContentView: View {
             .help("Preview and collect videos into linked library")
         case .library:
             Button {
-                presentOrganizePlan(workspace: ws)
-            } label: {
-                Label("Organize", systemImage: "tag")
-            }
-            .disabled(pipelineRunning)
-            .help("Apply Finder tags / Smart Folders")
-            Button {
                 presentRenamePlan(workspace: ws, files: nil)
             } label: {
                 Label("Clean Names", systemImage: "textformat")
@@ -762,24 +706,177 @@ struct ContentView: View {
         }
     }
 
-    /// 将侧栏规则分类写入 macOS Finder 彩色标签（整文件夹，无需选中文件）。
+    /// 标签操作目标：有选中 → 选中项；无选中 → 当前侧栏筛选下列表中的全部文件。
+    private func tagOperationTargets() -> [FileNode] {
+        guard let ws = selectedWorkspace else { return [] }
+        let selected = currentSelection
+        if !selected.isEmpty { return selected }
+        return resolveFileNodes(filesForCurrentSelection(workspace: ws))
+    }
+
+    /// 当前视图内的视频文件（选中优先，否则侧栏筛选下全部）。
+    private func videoOperationTargets() -> [FileNode] {
+        tagOperationTargets().filter { VideoFinderTagSyncService.isVideoNode($0) }
+    }
+
+    /// 视频 Finder 标签（分辨率 / 时长 / 编码 / 年份）写入与清除。
+    @ViewBuilder
+    private func videoTagToolbarItems(for ws: Workspace) -> some View {
+        let targets = videoOperationTargets()
+        let hasFinderTags = targets.contains { node in
+            guard let url = FileActions.url(for: node) else { return false }
+            return FinderTagWriter.hasTags(at: url)
+        }
+        Menu {
+            Button {
+                applyVideoFinderTagsAction(workspace: ws)
+            } label: {
+                Label("Apply Video Finder Tags", systemImage: "arrow.triangle.2.circlepath")
+            }
+            Button("Clear Video Finder Tags", role: .destructive) {
+                clearVideoFinderTagsAction(workspace: ws)
+            }
+            .disabled(!hasFinderTags)
+        } label: {
+            Label("Video Tags", systemImage: "film")
+        }
+        .disabled(targets.isEmpty)
+        .help(NSLocalizedString("toolbar.videoFinderTags.help",
+            value: "Apply or clear Finder color tags from video metadata (resolution, duration, codec, year)",
+            comment: ""))
+    }
+
+    private func clearVideoFinderTagsAction(workspace ws: Workspace) {
+        let targets = videoOperationTargets()
+        guard !targets.isEmpty else { return }
+
+        Task { @MainActor in
+            ActivityLog.shared.append(String(format:
+                NSLocalizedString("activity.videoFinderTags.clear.start.format",
+                    value: "Clearing video Finder tags for “%@”…", comment: ""),
+                ws.effectiveName))
+            let urls = FinderTagSyncService.buildClearJobs(nodes: targets)
+            let report = await Task.detached(priority: .utility) {
+                FinderTagSyncService.runClear(urls: urls)
+            }.value
+
+            let failNote = report.failures.isEmpty
+                ? ""
+                : String(format: NSLocalizedString("activity.finderTags.failures.format",
+                    value: " %lld failed.", comment: ""), Int64(report.failures.count))
+            ActivityLog.shared.append(String(format:
+                NSLocalizedString("activity.videoFinderTags.clear.done.format",
+                    value: "Video Finder tags cleared on %lld file(s) in “%@”.%@", comment: ""),
+                Int64(report.affected), ws.effectiveName, failNote))
+            activityLog.isExpanded = true
+            ToastCenter.shared.success(String(format:
+                NSLocalizedString("tag.toast.videoFinderCleared.format",
+                    value: "Video Finder tags cleared on %lld files", comment: ""),
+                Int64(report.affected)))
+        }
+    }
+
+    private func applyVideoFinderTagsAction(workspace ws: Workspace) {
+        let targets = videoOperationTargets()
+        guard !targets.isEmpty else { return }
+        let keys = ws.pipeline.enabledRuleKeys
+
+        Task { @MainActor in
+            ActivityLog.shared.append(String(format:
+                NSLocalizedString("activity.videoFinderTags.start.format",
+                    value: "Writing video Finder tags for “%@”…", comment: ""),
+                ws.effectiveName))
+            let jobs = VideoFinderTagSyncService.buildApplyJobs(nodes: targets, enabledKeys: keys)
+            guard !jobs.isEmpty else {
+                ToastCenter.shared.info(
+                    NSLocalizedString("tag.toast.videoFinderNone",
+                        value: "No video classifications to apply (check probe data and pipeline rules)",
+                        comment: ""))
+                return
+            }
+            let report = await Task.detached(priority: .utility) {
+                VideoFinderTagSyncService.runApply(jobs: jobs)
+            }.value
+
+            let failNote = report.failures.isEmpty
+                ? ""
+                : String(format: NSLocalizedString("activity.finderTags.failures.format",
+                    value: " %lld failed.", comment: ""), Int64(report.failures.count))
+            ActivityLog.shared.append(String(format:
+                NSLocalizedString("activity.videoFinderTags.done.format",
+                    value: "Video Finder tags: %lld files in “%@”.%@", comment: ""),
+                Int64(report.affected), ws.effectiveName, failNote))
+            activityLog.isExpanded = true
+            ToastCenter.shared.success(String(format:
+                NSLocalizedString("tag.toast.videoFinderSynced.format",
+                    value: "Video Finder tags applied to %lld files", comment: ""),
+                Int64(report.affected)))
+        }
+    }
+
+    /// Finder 彩色标签：写入 / 清除（工具栏）。
     @ViewBuilder
     private func tagToolbarItems() -> some View {
-        Button {
-            syncFinderTagsAction()
+        let targets = tagOperationTargets()
+        let hasFinderTags = targets.contains { node in
+            guard let url = FileActions.url(for: node) else { return false }
+            return FinderTagWriter.hasTags(at: url)
+        }
+        Menu {
+            Button {
+                syncFinderTagsAction()
+            } label: {
+                Label("Apply Finder Tags", systemImage: "arrow.triangle.2.circlepath")
+            }
+            Button("Clear Finder Tags", role: .destructive) {
+                clearFinderTagsAction()
+            }
+            .disabled(!hasFinderTags)
         } label: {
             Label("Finder Tags", systemImage: "tag.fill")
         }
-        .disabled(selectedWorkspace == nil)
+        .disabled(selectedWorkspace == nil || targets.isEmpty)
         .help(NSLocalizedString("toolbar.finderTags.help",
-            value: "Apply sidebar categories as Finder color tags to all files in this folder",
+            value: "Apply or clear macOS Finder color tags on selected files, or on all files in the current view when nothing is selected",
             comment: ""))
+    }
+
+    private func clearFinderTagsAction() {
+        guard let ws = selectedWorkspace else { return }
+        let targets = tagOperationTargets()
+        guard !targets.isEmpty else { return }
+
+        Task { @MainActor in
+            ActivityLog.shared.append(String(format:
+                NSLocalizedString("activity.finderTags.clear.start.format",
+                    value: "Clearing Finder tags for “%@”…", comment: ""),
+                ws.effectiveName))
+            let urls = FinderTagSyncService.buildClearJobs(nodes: targets)
+            let report = await Task.detached(priority: .utility) {
+                FinderTagSyncService.runClear(urls: urls)
+            }.value
+
+            let failNote = report.failures.isEmpty
+                ? ""
+                : String(format: NSLocalizedString("activity.finderTags.failures.format",
+                    value: " %lld failed.", comment: ""), Int64(report.failures.count))
+            ActivityLog.shared.append(String(format:
+                NSLocalizedString("activity.finderTags.clear.done.format",
+                    value: "Finder tags cleared on %lld file(s) in “%@”.%@", comment: ""),
+                Int64(report.affected), ws.effectiveName, failNote))
+            activityLog.isExpanded = true
+            ToastCenter.shared.success(String(format:
+                NSLocalizedString("tag.toast.finderCleared.format",
+                    value: "Finder tags cleared on %lld files", comment: ""),
+                Int64(report.affected)))
+        }
     }
 
     private func syncFinderTagsAction() {
         guard let ws = selectedWorkspace,
-              let manager = storeManager,
-              let storeCtx = workspaceStoreContext(for: ws) else { return }
+              let manager = storeManager else { return }
+        let targets = tagOperationTargets()
+        guard !targets.isEmpty else { return }
 
         Task { @MainActor in
             ActivityLog.shared.append(String(format:
@@ -788,27 +885,14 @@ struct ContentView: View {
                 ws.effectiveName))
             let indexer = FileIndexer(storeManager: manager)
             do {
-                if selectedFileIDs.isEmpty {
-                    try await indexer.applyRules(workspaceID: ws.id)
-                } else {
-                    try indexer.applyRules(to: currentSelection, workspaceID: ws.id)
-                }
+                try indexer.applyRules(to: targets, workspaceID: ws.id)
             } catch {
                 ToastCenter.shared.error(error.localizedDescription)
                 return
             }
             filesMemo.invalidate()
 
-            let nodes: [FileNode]
-            if selectedFileIDs.isEmpty {
-                nodes = (try? storeCtx.fetch(FetchDescriptor<FileNode>(
-                    predicate: #Predicate<FileNode> { $0.isPresent }
-                ))) ?? []
-            } else {
-                nodes = currentSelection
-            }
-
-            let jobs = FinderTagSyncService.buildJobs(nodes: nodes, rules: ws.rules)
+            let jobs = FinderTagSyncService.buildJobs(nodes: targets, rules: ws.rules)
             let report = await Task.detached(priority: .utility) {
                 FinderTagSyncService.run(jobs: jobs)
             }.value
@@ -820,12 +904,12 @@ struct ContentView: View {
             ActivityLog.shared.append(String(format:
                 NSLocalizedString("activity.finderTags.done.format",
                     value: "Finder tags: %lld files in “%@”.%@", comment: ""),
-                Int64(report.tagged), ws.effectiveName, failNote))
+                Int64(report.affected), ws.effectiveName, failNote))
             activityLog.isExpanded = true
             ToastCenter.shared.success(String(format:
                 NSLocalizedString("tag.toast.finderSynced.format",
                     value: "Finder tags applied to %lld files", comment: ""),
-                Int64(report.tagged)))
+                Int64(report.affected)))
         }
     }
 
@@ -850,17 +934,6 @@ struct ContentView: View {
         pipelineOperation = PipelineOperation(
             kind: .collect(inboxID: inbox.id, libraryID: libID, items: items)
         )
-    }
-
-    private func presentOrganizePlan(workspace: Workspace) {
-        let count = VideoPipelineRunner.previewOrganizeCount(library: workspace)
-        guard count > 0 else {
-            ToastCenter.shared.info(
-                NSLocalizedString("operation.organize.empty",
-                                    value: "No videos in this library.", comment: ""))
-            return
-        }
-        pipelineOperation = PipelineOperation(kind: .organize(workspaceID: workspace.id, fileCount: count))
     }
 
     private func presentRenamePlan(workspace: Workspace, files: [FileNode]?) {
