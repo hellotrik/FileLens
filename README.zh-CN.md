@@ -43,6 +43,16 @@
 - 🌐 **中英双语**开箱即用
 - 🛡 **非破坏性承诺** —— 任何规则都不会移动、重命名、修改你的文件
 
+## Video Tools（替代 video-tools）
+
+FileLens 内置视频管道，覆盖原 [video-tools](https://github.com/lifedever/video-tools) Rust TUI：安全归集、ffprobe 元数据、四维分类、Finder 整理、文件名清洗。路径与选项均在 **文件夹设置 → 管道**（按 Workspace 角色配置）。
+
+- 打开方式：**设置 → Video → 设置视频管道**，或 **文件夹设置 → 管道**；工具栏 **Collect / Organize / Clean Names**；**Activity Log**（`⌘⇧V`）
+- 依赖：`brew install ffmpeg`（提供 `ffprobe`）
+- 若曾使用 video-tools，启动时会自动从 `~/.config/video-tui/config.toml` 创建对应 Workspace
+
+典型流程：在 **文件夹设置 → 管道** 配置角色（摄入源 / 视频库）→ 工具栏 **Collect / Organize** → 侧栏按 4K / HEVC 等规则浏览 → **文件名** 页试运行并落地清洗。
+
 ## 安装
 
 [**↓ 下载最新版 DMG**](https://github.com/lifedever/FileLens/releases/latest)
@@ -71,6 +81,7 @@ sudo xattr -rd com.apple.quarantine /Applications/FileLens.app
 | 切换详情栏 | `⌘I` |
 | 搜索 | `⌘F` |
 | 切换视图（图标 / 列表） | `⌘1` / `⌘2` |
+| Activity Log | `⌘⇧V` |
 | 设置 | `⌘,` |
 
 ## 自己编译

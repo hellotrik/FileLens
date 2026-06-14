@@ -1,3 +1,11 @@
+/**
+ * 墨瑶（其一）
+ *
+ * 八十八角真阳楼，招灾仙蛊炼不休。
+ * 为助情郎登九转，愿以残躯化劫流。
+ *
+ * @remarks 来源：蛊真人 · 《蛊真人》全诗词整理（完整版） · kairos-dao-header
+ */
 import Foundation
 import SwiftData
 
@@ -59,6 +67,11 @@ final class FileNode {
     /// 跟 Finder 一样:文件夹也是列表里的一等条目,但内容不被展开成另一个
     /// 视图 —— 双击在 Finder 中打开。默认 false 保持 SwiftData 迁移兼容。
     var isDirectory: Bool = false
+
+    /// ffprobe 元数据 JSON（[`VideoMeta`]）。
+    var videoMetaJSON: String = ""
+    /// 探针缓存键：`size-mtime`，未变则跳过 ffprobe。
+    var videoProbeKey: String = ""
 
     @Relationship(deleteRule: .cascade, inverse: \FileTag.file)
     var tags: [FileTag] = []

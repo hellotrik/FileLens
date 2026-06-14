@@ -1,3 +1,11 @@
+/**
+ * 墨瑶（其一）
+ *
+ * 八十八角真阳楼，招灾仙蛊炼不休。
+ * 为助情郎登九转，愿以残躯化劫流。
+ *
+ * @remarks 来源：蛊真人 · 《蛊真人》全诗词整理（完整版） · kairos-dao-header
+ */
 import Foundation
 import SwiftData
 import UniformTypeIdentifiers
@@ -192,7 +200,8 @@ final class FileIndexer {
                 // 主线程开销。
                 let dateModifiedChanged = existingNode.dateModified != meta.dateModified
                 let sizeChanged = existingNode.size != meta.size
-                if silent && !dateModifiedChanged && !sizeChanged {
+                let kindChanged = existingNode.kind != meta.kind
+                if silent && !dateModifiedChanged && !sizeChanged && !kindChanged {
                     existingNode.lastSeenAt = scanStart
                     if !existingNode.isPresent { existingNode.isPresent = true }
                 } else {
@@ -206,6 +215,9 @@ final class FileIndexer {
                     existingNode.isPresent = true
                     existingNode.fileResourceID = meta.fileResourceID
                     existingNode.isDirectory = meta.isDirectory
+                    if dateModifiedChanged || sizeChanged || kindChanged {
+                        existingNode.rulesEvaluatedAt = nil
+                    }
                 }
                 node = existingNode
             } else {
@@ -287,9 +299,10 @@ final class FileIndexer {
                 ? allPresentNodes.filter { $0.rulesEvaluatedAt == nil }
                 : allPresentNodes
             probe("rules-start", nodesToApply.count)
+            let ruleByName = Dictionary(uniqueKeysWithValues: rules.map { ($0.name, $0) })
             var ruleProcessed = 0
             for node in nodesToApply {
-                applyRulesInline(to: node, rules: rules, ctx: storeCtx)
+                applyRulesInline(to: node, rules: rules, ruleByName: ruleByName, ctx: storeCtx)
                 ruleProcessed += 1
                 if ruleProcessed.isMultiple(of: 50) {
                     await Task.yield()
@@ -307,37 +320,88 @@ final class FileIndexer {
         }
 
         // 收尾:把所有 sidebar 需要的 count 一次性算好回写 catalog。
-        var presentCount = 0
-        var uncategorized = 0
-        var ruleCounts: [String: Int] = [:]
-        for node in allPresentNodes where node.isPresent {
-            presentCount += 1
-            let ruleIDs = Set(node.tags.compactMap { $0.ruleID })
-            if ruleIDs.isEmpty {
-                uncategorized += 1
-            } else {
-                for rid in ruleIDs {
-                    ruleCounts[rid.uuidString, default: 0] += 1
-                }
-            }
-        }
-        workspace.fileCount = presentCount
-        workspace.uncategorizedCount = uncategorized
-        // bump 单调代数,让 FilesMemo cache 一定失效 —— 即使 presentCount
-        // 跟上次完全一样(Chrome download → rename 这种增删抵消场景)也
-        // 能让 UI 看到最新 isPresent 集合。
+        let presentNodes = allPresentNodes.filter(\.isPresent)
+        let stats = TagService.computeStatistics(from: presentNodes)
+        TagService.applyStatistics(stats, presentCount: presentNodes.count, to: workspace)
         workspace.scanGeneration &+= 1
-        if let data = try? JSONEncoder().encode(ruleCounts),
-           let json = String(data: data, encoding: .utf8) {
-            workspace.ruleCountsJSON = json
-        }
         if !silent {
             workspace.indexStateRaw = 0
             workspace.indexProgressDone = 0
             workspace.indexProgressTotal = 0
         }
         try catalogCtx.save()
-        probe("ready", presentCount)
+        ActivityLog.shared.append(String(format:
+            NSLocalizedString("activity.index.done.format",
+                value: "Indexed “%@”: %lld files.", comment: ""),
+            workspace.effectiveName, Int64(presentNodes.count)))
+        probeVideosIfNeeded(
+            workspace: workspace,
+            catalogCtx: catalogCtx,
+            storeCtx: storeCtx,
+            folderURL: folderURL,
+            allPresentNodes: allPresentNodes
+        )
+        probe("ready", presentNodes.count)
+    }
+
+    /// 扫描完成后对视频文件后台 ffprobe（不阻塞 UI 返回）；探针结束后重算视频规则标签。
+    private func probeVideosIfNeeded(
+        workspace: Workspace,
+        catalogCtx: ModelContext,
+        storeCtx: ModelContext,
+        folderURL: URL,
+        allPresentNodes: [FileNode]
+    ) {
+        let movieNodes = allPresentNodes.filter {
+            $0.isPresent && ($0.kind == "movie" || VideoExtensions.isVideoExtension($0.ext))
+        }
+        guard !movieNodes.isEmpty else { return }
+        let shouldProbe = workspace.role == .library || workspace.pipeline.probeVideos
+        guard shouldProbe else { return }
+
+        // 在 MainActor 上快照 Sendable 字段；后台只做 ffprobe，不可跨域读 SwiftData 模型。
+        let jobs: [VideoProbeJob] = movieNodes.compactMap { node in
+            let url = folderURL.appendingPathComponent(node.relativePath)
+            guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+            return VideoProbeService.job(from: node, url: url)
+        }
+        guard !jobs.isEmpty else { return }
+        let movieNodeIDs = Set(jobs.map(\.nodeID))
+
+        Task(priority: .utility) {
+            let results = await Task.detached(priority: .utility) {
+                jobs.compactMap { VideoProbeService.runProbe(job: $0) }
+            }.value
+
+            let present = (try? storeCtx.fetch(FetchDescriptor<FileNode>(
+                predicate: #Predicate<FileNode> { $0.isPresent }
+            ))) ?? []
+            let nodeByID = Dictionary(uniqueKeysWithValues: present.map { ($0.id, $0) })
+
+            for result in results {
+                guard let node = nodeByID[result.nodeID] else { continue }
+                VideoProbeService.applyProbeResult(
+                    to: node, metaJSON: result.metaJSON, probeKey: result.probeKey
+                )
+            }
+
+            let rules = workspace.rules
+            let ruleByName = Dictionary(uniqueKeysWithValues: rules.map { ($0.name, $0) })
+            for id in movieNodeIDs {
+                guard let node = nodeByID[id] else { continue }
+                applyRulesInline(to: node, rules: rules, ruleByName: ruleByName, ctx: storeCtx)
+            }
+
+            let stats = TagService.computeStatistics(from: present)
+            TagService.applyStatistics(stats, presentCount: present.count, to: workspace)
+            workspace.scanGeneration &+= 1
+            try? storeCtx.save()
+            try? catalogCtx.save()
+            ActivityLog.shared.append(String(format:
+                NSLocalizedString("activity.ffprobe.done.format",
+                    value: "ffprobe “%@”: %lld videos tagged.", comment: ""),
+                workspace.effectiveName, Int64(jobs.count)))
+        }
     }
 
     /// reapplyRulesIfNeeded 用:用户编辑了规则,重新跑一遍 tag。
@@ -354,8 +418,9 @@ final class FileIndexer {
             predicate: #Predicate<FileNode> { $0.isPresent }
         ))) ?? []
         var processed = 0
+        let ruleByName = Dictionary(uniqueKeysWithValues: rules.map { ($0.name, $0) })
         for node in nodes {
-            applyRulesInline(to: node, rules: rules, ctx: storeCtx)
+            applyRulesInline(to: node, rules: rules, ruleByName: ruleByName, ctx: storeCtx)
             processed += 1
             if processed.isMultiple(of: 50) {
                 await Task.yield()
@@ -368,10 +433,39 @@ final class FileIndexer {
         try storeCtx.save()
     }
 
+    /// 仅对指定节点重算规则标签(手动改标 / 清空后局部恢复)。
+    func applyRules(to nodes: [FileNode], workspaceID: UUID) throws {
+        guard !nodes.isEmpty else { return }
+        let catalogCtx = storeManager.catalog.mainContext
+        let descriptor = FetchDescriptor<Workspace>(
+            predicate: #Predicate<Workspace> { $0.id == workspaceID }
+        )
+        guard let workspace = try? catalogCtx.fetch(descriptor).first else { return }
+        let storeCtx = try storeManager.store(for: workspaceID).mainContext
+        let rules = workspace.rules
+        let ruleByName = Dictionary(uniqueKeysWithValues: rules.map { ($0.name, $0) })
+        for node in nodes {
+            applyRulesInline(to: node, rules: rules, ruleByName: ruleByName, ctx: storeCtx)
+        }
+        try storeCtx.save()
+        let present = (try? storeCtx.fetch(FetchDescriptor<FileNode>(
+            predicate: #Predicate<FileNode> { $0.isPresent }
+        ))) ?? []
+        let stats = TagService.computeStatistics(from: present)
+        TagService.applyStatistics(stats, presentCount: present.count, to: workspace)
+        workspace.scanGeneration &+= 1
+        try catalogCtx.save()
+    }
+
     // MARK: - Private
 
-    /// 给单个节点重打 rule tag。
-    private func applyRulesInline(to node: FileNode, rules: [Rule], ctx: ModelContext) {
+    /// 给单个节点重打 rule tag;手动标签保留不动。
+    private func applyRulesInline(
+        to node: FileNode,
+        rules: [Rule],
+        ruleByName: [String: Rule],
+        ctx: ModelContext
+    ) {
         let manualTags = node.tags.filter { $0.source == "manual" }
         for tag in node.tags where tag.source == "rule" {
             ctx.delete(tag)
@@ -380,7 +474,7 @@ final class FileIndexer {
 
         let names = RuleEngine.tags(for: node, rules: rules)
         for name in names {
-            let rule = rules.first(where: { $0.name == name })
+            let rule = ruleByName[name]
             let tag = FileTag(name: name, source: "rule", ruleID: rule?.id)
             tag.file = node
             ctx.insert(tag)

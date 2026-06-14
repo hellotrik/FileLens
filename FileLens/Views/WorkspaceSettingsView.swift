@@ -1,3 +1,10 @@
+/**
+ * 墨瑶（其二）
+ *
+ * 土中蕴光，芒高万丈，百里天游，咏梅雪香。
+ *
+ * @remarks 来源：蛊真人 · 《蛊真人》全诗词整理（完整版） · kairos-dao-header
+ */
 import SwiftUI
 import SwiftData
 
@@ -15,8 +22,11 @@ struct WorkspaceSettingsView: View {
     let onSaved: (Workspace) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query(filter: #Predicate<Workspace> { !$0.isPendingDeletion })
+    private var allWorkspaces: [Workspace]
 
-    private enum Tab: Hashable { case general, scope, exclude }
+    private enum Tab: Hashable { case general, scope, exclude, pipeline }
     @State private var tab: Tab = .general
 
     /// 把递归这一栏抽成本地 state,避免 toggle 跟 maxDepth 字段实时绑定时
@@ -28,6 +38,10 @@ struct WorkspaceSettingsView: View {
     @State private var includeFolders: Bool
     @State private var extraIgnoreFolders: String
     @State private var watchEnabled: Bool
+    @State private var role: WorkspaceRole
+    @State private var linkedLibraryUUID: UUID?
+    @State private var pipeline: WorkspacePipelineConfig
+    @State private var organizeMethod: VideoOrganizeMethod
 
     init(workspace: Workspace, onSaved: @escaping (Workspace) -> Void) {
         self.workspace = workspace
@@ -40,6 +54,10 @@ struct WorkspaceSettingsView: View {
         _includeFolders = State(initialValue: snap.includeFolders)
         _extraIgnoreFolders = State(initialValue: snap.extraIgnoreFolders)
         _watchEnabled = State(initialValue: snap.watchEnabled)
+        _role = State(initialValue: snap.role)
+        _linkedLibraryUUID = State(initialValue: snap.linkedLibraryUUID)
+        _pipeline = State(initialValue: snap.pipeline)
+        _organizeMethod = State(initialValue: VideoOrganizeMethod.from(stored: snap.pipeline.organizeMethod))
     }
 
     var body: some View {
@@ -68,6 +86,9 @@ struct WorkspaceSettingsView: View {
             tabButton(.exclude,
                       label: "workspace.settings.tab.exclude",
                       icon: "minus.circle")
+            tabButton(.pipeline,
+                      label: "workspace.settings.tab.pipeline",
+                      icon: "arrow.triangle.branch")
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
@@ -110,6 +131,7 @@ struct WorkspaceSettingsView: View {
         case .general: generalTab
         case .scope:   scopeTab
         case .exclude: excludeTab
+        case .pipeline: pipelineTab
         }
     }
 
@@ -182,6 +204,99 @@ struct WorkspaceSettingsView: View {
         .scrollContentBackground(.hidden)
         .scrollDisabled(true)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// 管道：角色 / 归集目标 / 整理 / 探针。
+    private var pipelineTab: some View {
+        Form {
+            Section {
+                Picker("workspace.settings.role", selection: $role) {
+                    ForEach(WorkspaceRole.allCases) { r in
+                        Label(r.label, systemImage: r.systemImage).tag(r)
+                    }
+                }
+            } footer: {
+                Text(roleFooter)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if role == .inbox {
+                Section("workspace.settings.pipeline.collectTarget") {
+                    Picker("workspace.settings.pipeline.library", selection: $linkedLibraryUUID) {
+                        Text("workspace.settings.pipeline.library.none").tag(UUID?.none)
+                        ForEach(libraryWorkspaces) { lib in
+                            Text(verbatim: lib.effectiveName).tag(Optional(lib.id))
+                        }
+                    }
+                }
+            }
+
+            if role == .library {
+                Section("workspace.settings.pipeline.organize") {
+                    Picker("workspace.settings.pipeline.method", selection: $organizeMethod) {
+                        ForEach(VideoOrganizeMethod.allCases) { m in
+                            Text(m.label).tag(m)
+                        }
+                    }
+                    ForEach(["resolution", "duration", "codec", "year"], id: \.self) { key in
+                        Toggle(key, isOn: ruleKeyBinding(key))
+                    }
+                }
+                Section("workspace.settings.pipeline.renameDefaults") {
+                    Toggle("Strip [square]", isOn: $pipeline.renameOptions.stripSquare)
+                    Toggle("Lowercase extension", isOn: $pipeline.renameOptions.lowercaseExt)
+                }
+            }
+
+            if role == .library || role == .watch {
+                Section {
+                    Toggle("workspace.settings.pipeline.probeVideos", isOn: $pipeline.probeVideos)
+                } footer: {
+                    Text("workspace.settings.pipeline.probeVideos.hint")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .scrollDisabled(true)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var libraryWorkspaces: [Workspace] {
+        allWorkspaces.filter { $0.id != workspace.id && $0.role == .library }
+    }
+
+    private var roleFooter: String {
+        switch role {
+        case .watch:
+            return NSLocalizedString("workspace.settings.role.watch.hint",
+                value: "Browse and tag files without moving them.", comment: "")
+        case .inbox:
+            return NSLocalizedString("workspace.settings.role.inbox.hint",
+                value: "Video intake folder. Use toolbar Collect to move files into a library.", comment: "")
+        case .library:
+            return NSLocalizedString("workspace.settings.role.library.hint",
+                value: "Canonical video store with ffprobe metadata and video rules.", comment: "")
+        }
+    }
+
+    private func ruleKeyBinding(_ key: String) -> Binding<Bool> {
+        Binding(
+            get: { pipeline.enabledRuleKeys.contains(key) },
+            set: { on in
+                if on {
+                    if !pipeline.enabledRuleKeys.contains(key) {
+                        pipeline.enabledRuleKeys.append(key)
+                    }
+                } else {
+                    pipeline.enabledRuleKeys.removeAll { $0 == key }
+                }
+            }
+        )
     }
 
     /// 排除:此 workspace 专属忽略文件夹列表。
@@ -294,15 +409,32 @@ struct WorkspaceSettingsView: View {
         workspace.includeFolders = includeFolders
         workspace.extraIgnoreFolders = extraIgnoreFolders
         workspace.watchEnabled = watchEnabled
+        workspace.role = role
+        workspace.linkedLibraryUUID = linkedLibraryUUID
+        var savedPipeline = pipeline
+        savedPipeline.organizeMethod = organizeMethod.rawValue
+        workspace.pipeline = savedPipeline
+
+        if role == .library,
+           !workspace.rules.contains(where: { $0.conditions.contains { $0.field == "videoResolution" } }) {
+            for rule in BuiltInVideoRules.libraryPack() {
+                rule.workspace = workspace
+                modelContext.insert(rule)
+                for c in rule.conditions { modelContext.insert(c) }
+            }
+        }
 
         // 只有"会影响 scan 结果或 watcher 状态"的字段变了才触发回调。
-        // displayName 改了不需要 rescan(只是显示)。
+        // displayName / role / pipeline 改了也需要 rescan(探针/规则)。
         let needsRescan =
             recursive != initialSnapshot.recursive ||
             newDepth != initialSnapshot.maxDepth ||
             includeFolders != initialSnapshot.includeFolders ||
             extraIgnoreFolders != initialSnapshot.extraIgnoreFolders ||
-            watchEnabled != initialSnapshot.watchEnabled
+            watchEnabled != initialSnapshot.watchEnabled ||
+            role != initialSnapshot.role ||
+            linkedLibraryUUID != initialSnapshot.linkedLibraryUUID ||
+            savedPipeline != initialSnapshot.pipeline
 
         if needsRescan {
             onSaved(workspace)
@@ -316,6 +448,9 @@ struct WorkspaceSettingsView: View {
         let includeFolders: Bool
         let extraIgnoreFolders: String
         let watchEnabled: Bool
+        let role: WorkspaceRole
+        let linkedLibraryUUID: UUID?
+        let pipeline: WorkspacePipelineConfig
 
         init(_ ws: Workspace) {
             displayName = ws.displayName
@@ -324,6 +459,9 @@ struct WorkspaceSettingsView: View {
             includeFolders = ws.includeFolders
             extraIgnoreFolders = ws.extraIgnoreFolders
             watchEnabled = ws.watchEnabled
+            role = ws.role
+            linkedLibraryUUID = ws.linkedLibraryUUID
+            pipeline = ws.pipeline
         }
     }
 }

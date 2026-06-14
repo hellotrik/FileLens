@@ -1,0 +1,113 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "id": "filelens-xcodegen",
+            "label": "FileLens: Generate Xcode Project",
+            "type": "shell",
+            "icon": {
+                "id": "gear",
+                "tooltip": "xcodegen generate"
+            },
+            "command": "xcodegen generate",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "id": "filelens-build-debug",
+            "label": "FileLens: Build Debug",
+            "type": "shell",
+            "icon": {
+                "id": "debug",
+                "tooltip": "xcodebuild Debug"
+            },
+            "dependsOn": ["filelens-xcodegen"],
+            "command": "xcodebuild -project FileLens.xcodeproj -scheme FileLens -configuration Debug -destination 'platform=macOS' build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "id": "filelens-dev",
+            "label": "FileLens: Dev Build & Run",
+            "type": "shell",
+            "icon": {
+                "id": "play",
+                "tooltip": "编译 Debug 并安装到 /Applications/FileLens dev.app"
+            },
+            "dependsOn": ["filelens-xcodegen"],
+            "command": "./Scripts/dev.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "id": "filelens-build-release",
+            "label": "FileLens: Build Release",
+            "type": "shell",
+            "icon": {
+                "id": "rocket",
+                "tooltip": "xcodebuild Release"
+            },
+            "dependsOn": ["filelens-xcodegen"],
+            "command": "xcodebuild -project FileLens.xcodeproj -scheme FileLens -configuration Release -destination 'platform=macOS' build",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "id": "filelens-pack-arm64",
+            "label": "FileLens: Pack DMG (arm64)",
+            "type": "shell",
+            "icon": {
+                "id": "gift",
+                "tooltip": "Release 编译并打 arm64 DMG → dist/"
+            },
+            "dependsOn": ["filelens-xcodegen"],
+            "command": "./Scripts/pack.sh arm64",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "id": "filelens-pack-all",
+            "label": "FileLens: Pack DMG (arm64 + x86_64)",
+            "type": "shell",
+            "icon": {
+                "id": "flame",
+                "tooltip": "双架构 Release 编译并打 DMG → dist/（不含 GitHub 上传）"
+            },
+            "dependsOn": ["filelens-xcodegen"],
+            "command": "./Scripts/pack.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "id": "filelens-release",
+            "label": "FileLens: Release (upload)",
+            "type": "shell",
+            "icon": {
+                "id": "megaphone",
+                "tooltip": "完整发版：打 DMG + GitHub/Gitee 上传（需 gh / GITEE_TOKEN）"
+            },
+            "dependsOn": ["filelens-xcodegen"],
+            "command": "./Scripts/release-local.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

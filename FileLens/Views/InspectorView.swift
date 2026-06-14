@@ -1,3 +1,13 @@
+/**
+ * 古月方源·大爱仙尊｜宿命篇
+ *
+ * 落魄谷中寒风吹，春秋蝉鸣少年归。
+ * 荡魂山处石人泪，定仙游走魔向北。
+ * 逆流河上万仙退，爱情不敌坚持泪。
+ * 宿命天成命中败，仙尊悔而我不悔。
+ *
+ * @remarks 来源：蛊真人 · 《蛊真人》全诗词整理（完整版） · kairos-dao-header
+ */
 import SwiftUI
 import SwiftData
 import AppKit
@@ -21,6 +31,7 @@ struct InspectorSnapshot {
     struct TagInfo: Hashable {
         let name: String
         let colorHex: String
+        let isManual: Bool
     }
 
     let id: UUID
@@ -32,6 +43,8 @@ struct InspectorSnapshot {
     let relativePath: String
     let tags: [TagInfo]
     let icon: NSImage
+    /// 视频 ffprobe 摘要（分辨率 · 时长 · 编码）。
+    let videoSummary: String?
     /// 解算一次的真实 file URL,给 PreviewHost 用。父 body 里同步取出,
     /// 让 InspectorView 的预览子树拿到 primitive,避免动画期间触发 bookmark
     /// resolve(那是 IO)。失败为 nil → PreviewHost 显示 unsupported 兜底。
@@ -48,6 +61,11 @@ struct InspectorSnapshot {
         self.relativePath = f.relativePath
         self.icon = FileIconCache.icon(for: f)
         self.url = FileActions.url(for: f)
+        if f.kind == "movie" || VideoExtensions.isVideoExtension(f.ext) {
+            self.videoSummary = VideoMetaDisplay.summary(from: f.videoMetaJSON)
+        } else {
+            self.videoSummary = nil
+        }
 
         // 从 workspace 的 rule 列表里建一个 name → color 索引,FileTag 拿
         // 它名字反查颜色。
@@ -55,7 +73,11 @@ struct InspectorSnapshot {
             uniqueKeysWithValues: rules.map { ($0.name, $0.color) }
         )
         self.tags = f.tags.map { tag in
-            TagInfo(name: tag.name, colorHex: colorByName[tag.name] ?? "#9CA3AF")
+            let isManual = tag.source == "manual"
+            let color = isManual
+                ? TagService.manualTagColorHex
+                : (colorByName[tag.name] ?? "#9CA3AF")
+            return TagInfo(name: tag.name, colorHex: color, isManual: isManual)
         }
     }
 }
@@ -63,9 +85,9 @@ struct InspectorSnapshot {
 struct InspectorView: View {
     let snapshot: InspectorSnapshot?
     /// 实际选中的文件,作为 actions 的目标。空数组时不显示操作面板。
-    /// 跟 snapshot 解耦:snapshot 只是单文件的展示数据,actions 走 array
-    /// 既支持单选也支持多选(rename 之类内部判断 count == 1 自动隐藏)。
     let selectedFiles: [FileNode]
+    var workspace: Workspace?
+    var onCleanFilenames: (([FileNode]) -> Void)?
     @Environment(\.modelContext) private var modelContext
 
     var body: some View {
@@ -85,10 +107,10 @@ struct InspectorView: View {
             VStack(alignment: .leading, spacing: 14) {
                 if selectedFiles.count > 1 {
                     multiSelectHeader
-                } else if let s = snapshot, let file = selectedFiles.first {
-                    // 顶部预览区:单选时显示。多选时不构造,与原有 multiSelect
-                    // 路径完全一致,避免给「批量选中」场景额外造视觉噪声。
-                    PreviewHost(file: file, url: s.url)
+                } else if let s = snapshot, selectedFiles.first != nil {
+                    if let file = selectedFiles.first {
+                        PreviewHost(file: file, url: s.url)
+                    }
                     singleHeader(for: s)
                     Divider()
                     metadata(for: s)
@@ -96,6 +118,10 @@ struct InspectorView: View {
                     tagsSection(for: s)
                 }
 
+                if showsPipelineActions {
+                    Divider()
+                    pipelineActionsSection
+                }
                 Divider()
                 actionsSection
             }
@@ -152,6 +178,9 @@ struct InspectorView: View {
 
     private func metadata(for s: InspectorSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            if let video = s.videoSummary {
+                labeled("Video", video)
+            }
             labeled("Kind",     KindDisplay.localizedName(s.kind))
             labeled("Added",    Self.dateString(s.dateAdded))
             labeled("Modified", Self.dateString(s.dateModified))
@@ -161,11 +190,59 @@ struct InspectorView: View {
 
     @ViewBuilder
     private func tagsSection(for s: InspectorSnapshot) -> some View {
-        Text("Tags").font(.caption).foregroundStyle(.secondary)
+        HStack {
+            Text("Tags").font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Button("Add Tag…") {
+                TagMenuBridge.onAddTag?(selectedFiles)
+            }
+            .font(.caption)
+        }
         if s.tags.isEmpty {
             Text("No tags").foregroundStyle(.tertiary).font(.caption)
         } else {
-            FlowTags(tags: s.tags)
+            FlowTags(tags: s.tags) { tag in
+                guard tag.isManual, selectedFiles.count == 1, let file = selectedFiles.first else { return }
+                TagMenuBridge.onRemoveManualTag?(file, tag.name)
+            }
+        }
+        if selectedFiles.contains(where: { !$0.tags.isEmpty }) {
+            HStack(spacing: 12) {
+                Button("Clear Manual Tags", role: .destructive) {
+                    TagMenuBridge.onClearManualTags?(selectedFiles)
+                }
+                .font(.caption)
+                .disabled(!selectedFiles.contains { $0.tags.contains { $0.source == "manual" } })
+                Button("Clear All Tags", role: .destructive) {
+                    TagMenuBridge.onClearAllTags?(selectedFiles)
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    // MARK: - Pipeline actions
+
+    private var showsPipelineActions: Bool {
+        workspace?.role == .library
+            && onCleanFilenames != nil
+            && selectedFiles.contains { $0.kind == "movie" || VideoExtensions.isVideoExtension($0.ext) }
+    }
+
+    @ViewBuilder
+    private var pipelineActionsSection: some View {
+        if showsPipelineActions, let onCleanFilenames {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("inspector.section.pipeline")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button {
+                    onCleanFilenames(selectedFiles)
+                } label: {
+                    Label("inspector.action.cleanFilenames", systemImage: "textformat")
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -267,18 +344,32 @@ private struct InspectorActionButton: View {
 
 private struct FlowTags: View {
     let tags: [InspectorSnapshot.TagInfo]
+    var onRemoveManual: ((InspectorSnapshot.TagInfo) -> Void)?
+
     var body: some View {
         FlowLayout(spacing: 6) {
             ForEach(tags, id: \.self) { tag in
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(Color(hexString: tag.colorHex))
-                        .overlay(
-                            Circle().stroke(Color.primary.opacity(0.10), lineWidth: 0.5)
-                        )
-                        .frame(width: 8, height: 8)
-                    Text(verbatim: TagDisplay.localizedName(tag.name))
-                        .font(.caption)
+                HStack(spacing: 4) {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(Color(hexString: tag.colorHex))
+                            .overlay(
+                                Circle().stroke(Color.primary.opacity(0.10), lineWidth: 0.5)
+                            )
+                            .frame(width: 8, height: 8)
+                        Text(verbatim: TagDisplay.localizedName(tag.name))
+                            .font(.caption)
+                    }
+                    if tag.isManual, let onRemoveManual {
+                        Button {
+                            onRemoveManual(tag)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(Color.secondary.opacity(0.10), in: Capsule())

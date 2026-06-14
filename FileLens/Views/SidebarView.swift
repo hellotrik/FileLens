@@ -1,3 +1,11 @@
+/**
+ * 乐土仙尊（其一）
+ *
+ * 沉沦黄土十万年，今再扬尘拂行衣。
+ * 只愿苍生共平等，万千生灵竞相揖。
+ *
+ * @remarks 来源：蛊真人 · 《蛊真人》全诗词整理（完整版） · kairos-dao-header
+ */
 import SwiftUI
 import SwiftData
 import AppKit
@@ -5,6 +13,8 @@ import AppKit
 enum SidebarSelection: Hashable {
     case workspace(UUID)
     case tag(workspaceID: UUID, name: String)
+    /// 用户手动打的标签(sidebar 独立分组)。
+    case manualTag(workspaceID: UUID, name: String)
     case uncategorized(workspaceID: UUID)
 }
 
@@ -77,80 +87,15 @@ struct SidebarView: View {
 
     private var sidebarList: some View {
         List(selection: $selection) {
-            ForEach(workspaces.filter { !pendingDeletionIDs.contains($0.id) }) { ws in
-                DisclosureGroup(isExpanded: expansionBinding(for: ws.id)) {
-                    // Children render indented automatically by DisclosureGroup.
-
-                    // Tag rows — small colored dot (rule.color) gives each tag a
-                    // visual identity and aligns the leading edge with system rows.
-                    // Drag-reorder rewrites priorities so order persists.
-                    ForEach(visibleRules(in: ws)) { rule in
-                        tagRow(
-                            text: TagDisplay.localizedName(rule.name),
-                            count: filesCount(for: ws, rule: rule),
-                            color: Color(hexString: rule.color)
-                        )
-                        .opacity(rule.enabled ? 1.0 : 0.5)
-                        .tag(SidebarSelection.tag(workspaceID: ws.id, name: rule.name))
-                        .contextMenu {
-                            Button("Edit Rule…") { onEditRule(rule) }
-                            Button(rule.enabled ? "Disable" : "Enable") {
-                                rule.enabled.toggle()
-                            }
-                            Divider()
-                            Button("Delete Rule", role: .destructive) {
-                                ruleToDelete = rule
-                            }
-                        }
+            ForEach(groupedRoles, id: \.self) { role in
+                Section(role.sidebarSectionTitle) {
+                    ForEach(workspaces(for: role)) { ws in
+                        workspaceGroup(ws)
                     }
-                    .onMove { source, destination in
-                        reorderRules(in: ws, fromOffsets: source, toOffset: destination)
-                    }
-
-                    // 未归档:这个 workspace 下面没被任何规则匹配的文件。
-                    // 放在 DisclosureGroup 内部 = 跟着每个文件夹自己的扩展
-                    // 状态走,而且不依赖"当前选中"才出现 —— 文件夹一展开
-                    // 就在那等着。count == 0 时隐藏避免视觉噪音。
-                    if uncategorizedCount(for: ws) > 0 {
-                        rowLabel(
-                            text: NSLocalizedString("Unfiled", value: "Unfiled", comment: ""),
-                            count: uncategorizedCount(for: ws),
-                            icon: AnyView(symbolIcon("questionmark.circle").foregroundStyle(.secondary))
-                        )
-                        .tag(SidebarSelection.uncategorized(workspaceID: ws.id))
-                    }
-                } label: {
-                    workspaceRow(ws)
-                        // contextMenu 挂在 label 上,只对 workspace 行生效;若挂在
-                        // DisclosureGroup 外侧会泄漏到所有子规则的右键菜单。
-                        .contextMenu {
-                            Button("workspace.contextmenu.openInFinder") {
-                                openInFinder(ws)
-                            }
-                            Divider()
-                            Button("New Rule…") {
-                                onNewRule(ws)
-                            }
-                            Button("workspace.contextmenu.settings") {
-                                onEditWorkspace(ws)
-                            }
-                            Button("workspace.contextmenu.reindex") {
-                                onReindex(ws)
-                            }
-                            Divider()
-                            Button("workspace.remove…", role: .destructive) {
-                                workspaceToDelete = ws
-                            }
-                        }
                 }
-                .tag(SidebarSelection.workspace(ws.id))
-            }
-            .onMove { source, destination in
-                reorderWorkspaces(fromOffsets: source, toOffset: destination)
             }
 
-            // 底部 Section:系统级 "废纸篓"。Unfiled 已经移到每个文件夹的
-            // DisclosureGroup 内部,跟着该文件夹自己的展开状态走。
+            // 底部 Section:系统级 "废纸篓"。
             Section {
                 HStack(spacing: 6) {
                     iconSlot { symbolIcon("trash").foregroundStyle(.secondary) }
@@ -174,6 +119,7 @@ struct SidebarView: View {
             case .workspace(let id):
                 if let ws = workspaces.first(where: { $0.id == id }) { selectedWorkspace = ws }
             case .tag(let wsID, _),
+                 .manualTag(let wsID, _),
                  .uncategorized(let wsID):
                 if let ws = workspaces.first(where: { $0.id == wsID }),
                    ws.id != selectedWorkspace?.id {
@@ -252,6 +198,84 @@ struct SidebarView: View {
     }
 
     // MARK: Helpers
+
+    private var groupedRoles: [WorkspaceRole] {
+        [.library, .inbox, .watch]
+    }
+
+    private func workspaces(for role: WorkspaceRole) -> [Workspace] {
+        workspaces
+            .filter { !pendingDeletionIDs.contains($0.id) && $0.role == role }
+            .sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    @ViewBuilder
+    private func workspaceGroup(_ ws: Workspace) -> some View {
+        DisclosureGroup(isExpanded: expansionBinding(for: ws.id)) {
+            ForEach(visibleRules(in: ws)) { rule in
+                tagRow(
+                    text: TagDisplay.localizedName(rule.name),
+                    count: filesCount(for: ws, rule: rule),
+                    color: Color(hexString: rule.color)
+                )
+                .opacity(rule.enabled ? 1.0 : 0.5)
+                .tag(SidebarSelection.tag(workspaceID: ws.id, name: rule.name))
+                .contextMenu {
+                    Button("Edit Rule…") { onEditRule(rule) }
+                    Button(rule.enabled ? "Disable" : "Enable") {
+                        rule.enabled.toggle()
+                    }
+                    Divider()
+                    Button("Delete Rule", role: .destructive) {
+                        ruleToDelete = rule
+                    }
+                }
+            }
+            .onMove { source, destination in
+                reorderRules(in: ws, fromOffsets: source, toOffset: destination)
+            }
+
+            ForEach(manualTagNames(in: ws), id: \.self) { name in
+                tagRow(
+                    text: name,
+                    count: manualTagCount(for: ws, name: name),
+                    color: Color(hexString: TagService.manualTagColorHex)
+                )
+                .tag(SidebarSelection.manualTag(workspaceID: ws.id, name: name))
+            }
+
+            if uncategorizedCount(for: ws) > 0 {
+                rowLabel(
+                    text: NSLocalizedString("Unfiled", value: "Unfiled", comment: ""),
+                    count: uncategorizedCount(for: ws),
+                    icon: AnyView(symbolIcon("questionmark.circle").foregroundStyle(.secondary))
+                )
+                .tag(SidebarSelection.uncategorized(workspaceID: ws.id))
+            }
+        } label: {
+            workspaceRow(ws)
+                .contextMenu {
+                    Button("workspace.contextmenu.openInFinder") {
+                        openInFinder(ws)
+                    }
+                    Divider()
+                    Button("New Rule…") {
+                        onNewRule(ws)
+                    }
+                    Button("workspace.contextmenu.settings") {
+                        onEditWorkspace(ws)
+                    }
+                    Button("workspace.contextmenu.reindex") {
+                        onReindex(ws)
+                    }
+                    Divider()
+                    Button("workspace.remove…", role: .destructive) {
+                        workspaceToDelete = ws
+                    }
+                }
+        }
+        .tag(SidebarSelection.workspace(ws.id))
+    }
 
     private func visibleRules(in ws: Workspace) -> [Rule] {
         let sorted = ws.rules.sorted(by: { $0.priority < $1.priority })
@@ -354,6 +378,11 @@ struct SidebarView: View {
 
         HStack(spacing: 6) {
             iconSlot { folderIcon(for: ws) }
+            if ws.role != .watch {
+                Image(systemName: ws.role.systemImage)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
             Text(verbatim: ws.effectiveName)
                 .fontWeight(.semibold)
                 .lineLimit(1)
@@ -545,6 +574,17 @@ struct SidebarView: View {
 
     private func uncategorizedCount(for ws: Workspace) -> Int {
         ws.uncategorizedCount
+    }
+
+    private func manualTagNames(in ws: Workspace) -> [String] {
+        TagService.decodeManualCounts(ws.manualTagCountsJSON)
+            .filter { $0.value > 0 }
+            .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+            .map(\.key)
+    }
+
+    private func manualTagCount(for ws: Workspace, name: String) -> Int {
+        TagService.decodeManualCounts(ws.manualTagCountsJSON)[name] ?? 0
     }
 
     private static func decodeRuleCounts(_ json: String) -> [String: Int] {

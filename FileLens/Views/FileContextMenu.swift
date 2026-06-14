@@ -1,3 +1,15 @@
+/**
+ * 净身咒
+ *
+ * 吾以月洗身，以日炼真。
+ * 仙人辅我，玉女佐形。
+ * 二十八宿随吾指陈。
+ * 左有六甲，右有六丁，前有雷电，后有风云。
+ * 千邪万秽，逐气而清。
+ * 急急如律令。
+ *
+ * @remarks 来源：太上三洞神咒 卷08 · https://zh.wikisource.org/wiki/太上三洞神呪/8 · kairos-dao-header
+ */
 import SwiftUI
 import SwiftData
 
@@ -15,6 +27,8 @@ struct FileContextMenu: View {
         if files.isEmpty {
             EmptyView()
         } else {
+            tagSection
+            Divider()
             ForEach(Array(FileActionGroup.allCases.enumerated()), id: \.offset) { idx, group in
                 ForEach(group.kinds) { kind in
                     if kind.isAvailable(for: files) {
@@ -31,6 +45,21 @@ struct FileContextMenu: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var tagSection: some View {
+        Button("Add Tag…") {
+            TagMenuBridge.onAddTag?(files)
+        }
+        Button("Clear Manual Tags", role: .destructive) {
+            TagMenuBridge.onClearManualTags?(files)
+        }
+        .disabled(!files.contains { $0.tags.contains { $0.source == "manual" } })
+        Button("Clear All Tags", role: .destructive) {
+            TagMenuBridge.onClearAllTags?(files)
+        }
+        .disabled(!files.contains { !$0.tags.isEmpty })
     }
 }
 

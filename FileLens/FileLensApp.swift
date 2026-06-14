@@ -1,3 +1,11 @@
+/**
+ * 古月方源·大爱仙尊｜心志篇（其一）
+ *
+ * 因为困难多壮志，不教红尘惑坚心。
+ * 今身暂且栖草头，它日狂歌踏山河。
+ *
+ * @remarks 来源：蛊真人 · 《蛊真人》全诗词整理（完整版） · kairos-dao-header
+ */
 import SwiftUI
 import SwiftData
 
@@ -53,6 +61,11 @@ struct FileLensApp: App {
                     WorkspaceRecursiveMigration.runIfNeeded(container: container)
                     WorkspaceViewSettingsMigration.runIfNeeded(context: ModelContext(container))
                     ArchivesISOMigration.runIfNeeded(container: container)
+                    if let msg = try? VideoConfigImporter.importToCatalog(
+                        context: ModelContext(container)
+                    ) {
+                        ActivityLog.shared.append(msg)
+                    }
                     // 上次会话强退留下的"卡在索引中"状态 + 未完成 deletion 清理
                     WorkspaceStateRecovery.runIfNeeded(storeManager: storeManager)
                     // Silent update probe — only nags if there's a newer

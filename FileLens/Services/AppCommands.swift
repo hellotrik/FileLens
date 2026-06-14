@@ -1,3 +1,10 @@
+/**
+ * 导出元阳
+ *
+ * 导出敌人元阳（阳气/生机）；用于削弱对手与夺取元气。
+ *
+ * @remarks 来源：天罡三十六法 · https://baike.baidu.com/item/%E5%A4%A9%E7%BD%A1%E4%B8%89%E5%8D%81%E5%85%AD%E6%B3%95/60754650 · kairos-dao-header
+ */
 import SwiftUI
 
 // MARK: - Focused-value plumbing
@@ -13,6 +20,9 @@ private struct CheckUpdateActionKey: FocusedValueKey {
 }
 private struct ActiveWorkspaceNameKey: FocusedValueKey {
     typealias Value = String
+}
+private struct VideoToolsActionKey: FocusedValueKey {
+    typealias Value = () -> Void
 }
 
 extension FocusedValues {
@@ -35,6 +45,10 @@ extension FocusedValues {
         get { self[ActiveWorkspaceNameKey.self] }
         set { self[ActiveWorkspaceNameKey.self] = newValue }
     }
+    var videoToolsAction: (() -> Void)? {
+        get { self[VideoToolsActionKey.self] }
+        set { self[VideoToolsActionKey.self] = newValue }
+    }
 }
 
 // MARK: - Menu commands
@@ -42,6 +56,7 @@ extension FocusedValues {
 struct FileLensCommands: Commands {
     @FocusedValue(\.addFolderAction) private var addFolder
     @FocusedValue(\.newRuleAction) private var newRule
+    @FocusedValue(\.videoToolsAction) private var videoTools
     @FocusedValue(\.checkUpdateAction) private var checkUpdate
     @FocusedValue(\.activeWorkspaceName) private var workspaceName
     /// Mirrored in SidebarView so the two stay in sync — UserDefaults is
@@ -76,6 +91,14 @@ struct FileLensCommands: Commands {
             }
             .keyboardShortcut("n", modifiers: .command)
             .disabled(newRule == nil || workspaceName == nil)
+
+            Button {
+                videoTools?()
+            } label: {
+                Text("Activity Log")
+            }
+            .keyboardShortcut("v", modifiers: [.command, .shift])
+            .disabled(videoTools == nil)
         }
 
         CommandGroup(after: .appInfo) {

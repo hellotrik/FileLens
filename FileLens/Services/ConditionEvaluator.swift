@@ -1,3 +1,11 @@
+/**
+ * 古月方源·大爱仙尊｜独行孤途
+ *
+ * 曲折途穷天地窄，重重灾劫生死微。
+ * 身如柳絮随飞扬，无论云泥意贯一。
+ *
+ * @remarks 来源：蛊真人 · 《蛊真人》全诗词整理（完整版） · kairos-dao-header
+ */
 import Foundation
 
 enum ConditionEvaluator {
@@ -8,6 +16,10 @@ enum ConditionEvaluator {
         case "size":       return evalSize(file: file, op: condition.op, value: condition.value)
         case "dateAdded":  return evalDate(file: file, op: condition.op, value: condition.value)
         case "kind":       return evalKind(file: file, op: condition.op, value: condition.value)
+        case "videoResolution": return evalVideoCategory(file: file, key: "resolution", expected: condition.value)
+        case "videoDuration":   return evalVideoCategory(file: file, key: "duration", expected: condition.value)
+        case "videoCodec":      return evalVideoCategory(file: file, key: "codec", expected: condition.value)
+        case "videoYear":       return evalVideoCategory(file: file, key: "year", expected: condition.value)
         default:           return false
         }
     }
@@ -34,7 +46,7 @@ enum ConditionEvaluator {
         case "startsWith": return file.name.lowercased().hasPrefix(value.lowercased())
         case "endsWith":   return file.name.lowercased().hasSuffix(value.lowercased())
         case "matches":
-            guard let regex = try? NSRegularExpression(pattern: value) else { return false }
+            guard let regex = cachedRegex(pattern: value) else { return false }
             let range = NSRange(file.name.startIndex..., in: file.name)
             return regex.firstMatch(in: file.name, range: range) != nil
         default: return false
@@ -104,5 +116,20 @@ enum ConditionEvaluator {
             return kinds.contains(file.kind)
         default: return false
         }
+    }
+
+    private static func evalVideoCategory(file: FileNode, key: String, expected: String) -> Bool {
+        guard let meta = VideoMetaCoding.decode(file.videoMetaJSON) else { return false }
+        guard let c = VideoClassifier.classifyOne(key: key, meta: meta) else { return false }
+        return c.category == expected
+    }
+
+    private static var regexCache: [String: NSRegularExpression] = [:]
+
+    private static func cachedRegex(pattern: String) -> NSRegularExpression? {
+        if let cached = regexCache[pattern] { return cached }
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        regexCache[pattern] = regex
+        return regex
     }
 }

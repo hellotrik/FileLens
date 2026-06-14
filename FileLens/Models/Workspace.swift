@@ -1,3 +1,10 @@
+/**
+ * 飞身托迹
+ *
+ * 遁身天地之间、不可观不可查；用于隐匿、空间跳跃与托迹潜行。
+ *
+ * @remarks 来源：天罡三十六法 · https://baike.baidu.com/item/%E5%A4%A9%E7%BD%A1%E4%B8%89%E5%8D%81%E5%85%AD%E6%B3%95/60754650 · kairos-dao-header
+ */
 import Foundation
 import SwiftData
 
@@ -88,6 +95,9 @@ final class Workspace {
     /// 一次性算好回写。空字符串 = 没数据(没扫过)。
     var ruleCountsJSON: String = ""
 
+    /// 手动标签名 → 文件数,JSON `[tagName: Int]`。scan / 手动改标后回写。
+    var manualTagCountsJSON: String = ""
+
     /// 没匹配任何 rule 的文件数(未归档)。
     var uncategorizedCount: Int = 0
 
@@ -98,6 +108,15 @@ final class Workspace {
     /// 不消失,因为 fileCount 没变)。
     /// 用 Int 防 wrap;每天几百次 scan 也要 N 亿年才溢出。
     var scanGeneration: Int = 0
+
+    /// Workspace 角色：`watch` 只看不动 / `inbox` 视频摄入 / `library` 归集库。
+    var roleRaw: String = WorkspaceRole.watch.rawValue
+
+    /// inbox 归集目标（library workspace 的 id 字符串）。
+    var linkedLibraryID: String = ""
+
+    /// 管道 JSON（整理方式、规则键、改名默认、探针开关）。
+    var pipelineJSON: String = ""
 
     @Relationship(deleteRule: .cascade, inverse: \Rule.workspace)
     var rules: [Rule] = []
@@ -111,7 +130,10 @@ final class Workspace {
          displayName: String = "", extraIgnoreFolders: String = "",
          watchEnabled: Bool = true, includeFolders: Bool = true,
          viewModeRaw: Int = 2, gridIconSize: Double = 80,
-         tableColumnCustomizationJSON: String = "") {
+         tableColumnCustomizationJSON: String = "",
+         roleRaw: String = WorkspaceRole.watch.rawValue,
+         linkedLibraryID: String = "",
+         pipelineJSON: String = "") {
         self.id = id
         self.name = name
         self.folderPath = folderPath
@@ -127,6 +149,9 @@ final class Workspace {
         self.viewModeRaw = viewModeRaw
         self.gridIconSize = gridIconSize
         self.tableColumnCustomizationJSON = tableColumnCustomizationJSON
+        self.roleRaw = roleRaw
+        self.linkedLibraryID = linkedLibraryID
+        self.pipelineJSON = pipelineJSON
     }
 
     /// User-visible name. displayName 非空就用它,否则回 name。

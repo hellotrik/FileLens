@@ -1,3 +1,10 @@
+/**
+ * 飞砂走石
+ *
+ * 飞砂走石、风势狂暴；用于制造战场扰动与范围打击（设定）。
+ *
+ * @remarks 来源：天罡三十六法 · https://baike.baidu.com/item/%E5%A4%A9%E7%BD%A1%E4%B8%89%E5%8D%81%E5%85%AD%E6%B3%95/60754650 · kairos-dao-header
+ */
 import SwiftUI
 import AppKit
 import KeyboardShortcuts
@@ -50,6 +57,8 @@ struct SettingsView: View {
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
             SupportSettingsView()
                 .tabItem { Label("settings.support", systemImage: "heart") }
+            VideoSettingsTab()
+                .tabItem { Label("Video", systemImage: "film") }
             AboutSettingsView()
                 .tabItem { Label("About", systemImage: "info.circle") }
         }

@@ -1,3 +1,17 @@
+/**
+ * 杂篇名句
+ *
+ * 折剑沉沙，千古兴亡，不尽天河滚荡。
+ * 物换心移几春秋，唯天意苍茫。
+ * 
+ * 座座鹰巢入我手，百足蛊仙奈我何？
+ * 
+ * 大海啊，你全是水。
+ * 骏马啊，你四条腿。
+ * 美人啊，你眼含波。
+ *
+ * @remarks 来源：蛊真人 · 《蛊真人》全诗词整理（完整版） · kairos-dao-header
+ */
 import SwiftUI
 import SwiftData
 import AppKit
@@ -11,6 +25,11 @@ struct PendingWorkspace: Identifiable {
     let id = UUID()
     let url: URL
     let rules: [Rule]
+}
+
+private struct TagEditTarget: Identifiable {
+    let id = UUID()
+    let files: [FileNode]
 }
 
 struct ContentView: View {
@@ -56,6 +75,10 @@ struct ContentView: View {
     @AppStorage("filelens.columnVisibility") private var columnVisibilityRaw: String = "automatic"
     /// 当前正在编辑设置的 workspace。打开 WorkspaceSettingsView sheet。
     @State private var editingWorkspace: Workspace?
+    @State private var tagEditTarget: TagEditTarget?
+    @State private var pipelineOperation: PipelineOperation?
+    @State private var pipelineRunning = false
+    @ObservedObject private var activityLog = ActivityLog.shared
     @Environment(\.modelContext) private var modelContext
     @Environment(\.workspaceStoreManager) private var storeManager
     /// 跟 SidebarView 的 @Query 同样过滤掉 pending deletion —— 否则用户删
@@ -110,8 +133,14 @@ struct ContentView: View {
                         NSLocalizedString("workspace.reindex.toast.start",
                             value: "Reindexing folder…", comment: "")
                     )
+                    ActivityLog.shared.append(String(format:
+                        NSLocalizedString("activity.reindex.start.format",
+                            value: "Reindexing “%@”…", comment: ""), ws.effectiveName))
                     Task {
                         await coordinator?.reindex(workspace: ws)
+                        ActivityLog.shared.append(String(format:
+                            NSLocalizedString("activity.reindex.done.format",
+                                value: "Reindex complete: “%@”.", comment: ""), ws.effectiveName))
                         ToastCenter.shared.success(
                             NSLocalizedString("workspace.reindex.toast.done",
                                 value: "Reindex complete", comment: "")
@@ -194,14 +223,37 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .showWelcome)) { _ in
             welcomeOpen = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleActivityLog)) { _ in
+            withAnimation { activityLog.toggleExpanded() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .videoSetupCompleted)) { _ in
+            Task { await activateVideoWorkspaces() }
+        }
         .sheet(item: $editingRule) { rule in
             ruleEditorSheet(rule: rule)
+        }
+        .sheet(item: $tagEditTarget) { target in
+            TagEditorSheet(
+                files: target.files,
+                onSave: { name in
+                    applyManualTag(name, to: target.files)
+                    tagEditTarget = nil
+                },
+                onCancel: { tagEditTarget = nil }
+            )
+        }
+        .sheet(item: $pipelineOperation) { op in
+            PipelineOperationSheet(operation: op) {
+                Task { await refreshAfterPipeline() }
+            }
+            .environment(\.workspaceStoreManager, storeManager)
         }
         .background(hiddenShortcuts)
         .task {
             if coordinator == nil, let manager = storeManager {
                 coordinator = WorkspaceCoordinator(storeManager: manager)
             }
+            installTagMenuBridge()
         }
         .onChange(of: selectedWorkspace) { _, ws in
             Task {
@@ -232,6 +284,7 @@ struct ContentView: View {
         // Publish actions to the macOS menu bar (File → Add Folder…, New Rule…)
         .focusedValue(\.addFolderAction, addFolder)
         .focusedValue(\.newRuleAction, { newRule() })
+        .focusedValue(\.videoToolsAction, { activityLog.toggleExpanded() })
         .focusedValue(\.activeWorkspaceName, selectedWorkspace?.name)
     }
 
@@ -269,6 +322,14 @@ struct ContentView: View {
             let descriptor = FetchDescriptor<FileNode>(
                 predicate: #Predicate<FileNode> { f in
                     f.isPresent && f.tags.contains { $0.ruleID == ruleID }
+                },
+                sortBy: sortByDateAddedDesc
+            )
+            base = (try? storeCtx.fetch(descriptor)) ?? []
+        case .manualTag(_, let name):
+            let descriptor = FetchDescriptor<FileNode>(
+                predicate: #Predicate<FileNode> { f in
+                    f.isPresent && f.tags.contains { $0.source == "manual" && $0.name == name }
                 },
                 sortBy: sortByDateAddedDesc
             )
@@ -348,9 +409,7 @@ struct ContentView: View {
             var byFile: [UUID: [String]] = [:]
             byFile.reserveCapacity(nodes.count)
             for node in nodes {
-                let names = node.tags.compactMap { tag -> String? in
-                    tag.source == "rule" ? tag.name : nil
-                }
+                let names = node.tags.map(\.name)
                 if !names.isEmpty {
                     byFile[node.id] = names
                 }
@@ -419,6 +478,82 @@ struct ContentView: View {
             let indexer = FileIndexer(storeManager: manager)
             try? await indexer.applyRules(workspaceID: wsID)
             filesMemo.invalidate()
+        }
+    }
+
+    private func workspaceStoreContext(for ws: Workspace) -> ModelContext? {
+        guard let manager = storeManager else { return nil }
+        return try? manager.store(for: ws.id).mainContext
+    }
+
+    private func installTagMenuBridge() {
+        TagMenuBridge.onAddTag = { files in
+            guard !files.isEmpty else { return }
+            tagEditTarget = TagEditTarget(files: files)
+        }
+        TagMenuBridge.onClearManualTags = { files in
+            clearManualTags(from: files)
+        }
+        TagMenuBridge.onClearAllTags = { files in
+            clearAllTags(from: files)
+        }
+        TagMenuBridge.onRemoveManualTag = { file, name in
+            removeManualTag(name, from: file)
+        }
+    }
+
+    private func applyManualTag(_ rawName: String, to files: [FileNode]) {
+        guard let ws = selectedWorkspace,
+              let storeCtx = workspaceStoreContext(for: ws) else { return }
+        guard TagService.addManualTag(name: rawName, to: files, context: storeCtx) != nil else { return }
+        persistTagChanges(workspace: ws, storeCtx: storeCtx)
+        ToastCenter.shared.success(
+            NSLocalizedString("tag.toast.added", value: "Tag added", comment: "")
+        )
+    }
+
+    private func clearManualTags(from files: [FileNode]) {
+        guard let ws = selectedWorkspace,
+              let storeCtx = workspaceStoreContext(for: ws) else { return }
+        TagService.removeManualTags(from: files, context: storeCtx)
+        persistTagChanges(workspace: ws, storeCtx: storeCtx)
+        ToastCenter.shared.info(
+            NSLocalizedString("tag.toast.manualCleared", value: "Manual tags cleared", comment: "")
+        )
+    }
+
+    private func clearAllTags(from files: [FileNode]) {
+        guard let ws = selectedWorkspace,
+              let manager = storeManager,
+              let storeCtx = workspaceStoreContext(for: ws) else { return }
+        TagService.removeAllTags(from: files, context: storeCtx)
+        do {
+            try storeCtx.save()
+            let indexer = FileIndexer(storeManager: manager)
+            try indexer.applyRules(to: files, workspaceID: ws.id)
+            filesMemo.invalidate()
+            ToastCenter.shared.info(
+                NSLocalizedString("tag.toast.allCleared", value: "All tags cleared", comment: "")
+            )
+        } catch {
+            ToastCenter.shared.error(error.localizedDescription)
+        }
+    }
+
+    private func removeManualTag(_ name: String, from file: FileNode) {
+        guard let ws = selectedWorkspace,
+              let storeCtx = workspaceStoreContext(for: ws) else { return }
+        TagService.removeManualTags(from: [file], names: [name], context: storeCtx)
+        persistTagChanges(workspace: ws, storeCtx: storeCtx)
+    }
+
+    private func persistTagChanges(workspace ws: Workspace, storeCtx: ModelContext) {
+        do {
+            try storeCtx.save()
+            try TagService.refreshWorkspaceCounts(workspace: ws, storeCtx: storeCtx, catalogCtx: modelContext)
+            filesMemo.invalidate()
+        } catch {
+            ToastCenter.shared.error(error.localizedDescription)
         }
     }
 
@@ -510,6 +645,7 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 fileBody(files: files, tagsByFileID: tagsByFileID)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ActivityDrawerView()
                 Divider()
                 statusBar(files: files, selectedFiles: selectedSnapshots)
             }
@@ -519,7 +655,11 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     Divider()
                     InspectorView(snapshot: inspectorSnapshot,
-                                  selectedFiles: selectedFiles)
+                                  selectedFiles: selectedFiles,
+                                  workspace: ws,
+                                  onCleanFilenames: { files in
+                                      presentRenamePlan(workspace: ws, files: files)
+                                  })
                         .frame(width: inspectorWidth)
                 }
                 .transition(.move(edge: .trailing))
@@ -588,6 +728,9 @@ struct ContentView: View {
     @ToolbarContentBuilder
     private var detailToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
+            if let ws = selectedWorkspace {
+                pipelineToolbarItems(for: ws)
+            }
             Picker("View", selection: viewMode) {
                 Image(systemName: "square.grid.2x2").tag(ViewMode.grid)
                 Image(systemName: "list.bullet").tag(ViewMode.list)
@@ -601,6 +744,111 @@ struct ContentView: View {
             }
             .keyboardShortcut("i", modifiers: .command)
             .help("Show Info  ⌘I")
+        }
+    }
+
+    @ViewBuilder
+    private func pipelineToolbarItems(for ws: Workspace) -> some View {
+        switch ws.role {
+        case .inbox:
+            Button {
+                Task { await planCollect(from: ws) }
+            } label: {
+                Label("Collect", systemImage: "arrow.right.circle")
+            }
+            .disabled(pipelineRunning || ws.linkedLibraryUUID == nil)
+            .help("Preview and collect videos into linked library")
+        case .library:
+            Button {
+                presentOrganizePlan(workspace: ws)
+            } label: {
+                Label("Organize", systemImage: "tag")
+            }
+            .disabled(pipelineRunning)
+            .help("Apply Finder tags / Smart Folders")
+            Button {
+                presentRenamePlan(workspace: ws, files: nil)
+            } label: {
+                Label("Clean Names", systemImage: "textformat")
+            }
+            .disabled(pipelineRunning)
+            .help("Preview filename cleaning for entire library")
+        case .watch:
+            EmptyView()
+        }
+        if pipelineRunning {
+            ProgressView().controlSize(.small)
+        }
+    }
+
+    private func planCollect(from inbox: Workspace) async {
+        guard let libID = inbox.linkedLibraryUUID else {
+            ToastCenter.shared.error(
+                NSLocalizedString("pipeline.collect.noLibrary",
+                                  value: "Set a target library in Folder Settings → Pipeline.",
+                                  comment: ""))
+            return
+        }
+        pipelineRunning = true
+        ActivityLog.shared.append(NSLocalizedString("activity.collect.scanning",
+            value: "Scanning inbox for videos…", comment: ""))
+        let items = await VideoPipelineRunner.planCollect(inbox: inbox)
+        pipelineRunning = false
+        ActivityLog.shared.append(String(format:
+            NSLocalizedString("activity.collect.found.format",
+                value: "Found %lld video(s) in inbox.", comment: ""),
+            Int64(items.count)))
+        activityLog.isExpanded = true
+        pipelineOperation = PipelineOperation(
+            kind: .collect(inboxID: inbox.id, libraryID: libID, items: items)
+        )
+    }
+
+    private func presentOrganizePlan(workspace: Workspace) {
+        let count = VideoPipelineRunner.previewOrganizeCount(library: workspace)
+        guard count > 0 else {
+            ToastCenter.shared.info(
+                NSLocalizedString("operation.organize.empty",
+                                    value: "No videos in this library.", comment: ""))
+            return
+        }
+        pipelineOperation = PipelineOperation(kind: .organize(workspaceID: workspace.id, fileCount: count))
+    }
+
+    private func presentRenamePlan(workspace: Workspace, files: [FileNode]?) {
+        guard let storeCtx = try? storeManager?.store(for: workspace.id).mainContext else { return }
+        let nodes: [FileNode]
+        if let files, !files.isEmpty {
+            nodes = files
+        } else {
+            nodes = (try? storeCtx.fetch(FetchDescriptor<FileNode>(
+                predicate: #Predicate { $0.isPresent }
+            ))) ?? []
+        }
+        let items = VideoRenamePlanner.plan(nodes: nodes, options: workspace.pipeline.renameOptions)
+        guard !items.isEmpty else {
+            ToastCenter.shared.info(
+                NSLocalizedString("operation.rename.empty",
+                                    value: "No filenames need cleaning.", comment: ""))
+            return
+        }
+        pipelineOperation = PipelineOperation(kind: .rename(workspaceID: workspace.id, items: items))
+    }
+
+    private func refreshAfterPipeline() async {
+        guard let ws = selectedWorkspace else { return }
+        if ws.role == .inbox, let libID = ws.linkedLibraryUUID,
+           let library = workspaces.first(where: { $0.id == libID }) {
+            await coordinator?.activate(workspace: ws, forceRescan: true)
+            await coordinator?.activate(workspace: library, forceRescan: true)
+        } else {
+            await coordinator?.activate(workspace: ws, forceRescan: true)
+        }
+    }
+
+    private func activateVideoWorkspaces() async {
+        for ws in workspaces where ws.role != .watch {
+            await coordinator?.activate(workspace: ws, forceRescan: true)
         }
     }
 
@@ -916,6 +1164,8 @@ struct ContentView: View {
         switch selection {
         case .tag(_, let name):
             return "\(displayed) — \(TagDisplay.localizedName(name))"
+        case .manualTag(_, let name):
+            return "\(displayed) — \(name)"
         case .uncategorized:
             return "\(displayed) — \(NSLocalizedString("Unfiled", value: "Unfiled", comment: ""))"
         case .workspace, .none:
@@ -1001,6 +1251,7 @@ private final class FilesMemo {
         case .none:                       sel = "_"
         case .workspace(let id):          sel = "ws:\(id)"
         case .tag(_, let name):           sel = "t:\(name)"
+        case .manualTag(_, let name):     sel = "m:\(name)"
         case .uncategorized(let id):      sel = "u:\(id)"
         }
         return "\(sel)|\(search)"
