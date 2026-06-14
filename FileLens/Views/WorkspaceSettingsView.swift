@@ -274,13 +274,15 @@ struct WorkspaceSettingsView: View {
         switch role {
         case .watch:
             return NSLocalizedString("workspace.settings.role.watch.hint",
-                value: "Browse and tag files without moving them.", comment: "")
+                value: "Browse and tag files. Toolbar Finder Tags follow sidebar rules (Images, PDF, …).",
+                comment: "")
         case .inbox:
             return NSLocalizedString("workspace.settings.role.inbox.hint",
                 value: "Video intake folder. Use toolbar Collect to move files into a library.", comment: "")
         case .library:
             return NSLocalizedString("workspace.settings.role.library.hint",
-                value: "Canonical video store with ffprobe metadata and video rules.", comment: "")
+                value: "Video library with ffprobe. Toolbar Finder Tags use metadata (resolution, duration, codec, year)—not sidebar rule names.",
+                comment: "")
         }
     }
 

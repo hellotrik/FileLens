@@ -184,8 +184,8 @@ final class FileIndexer {
         }
 
         let workspaceID = workspace.id
-        // rules snapshot —— catalog 上读出来,scan 期间快照不变
-        let rules = workspace.rules
+        // rules snapshot —— catalog 上读出来,scan 期间快照不变；按角色过滤。
+        let rules = RuleRoleFilter.rules(for: workspace.role, from: workspace.rules)
         var allPresentNodes: [FileNode] = []
         allPresentNodes.reserveCapacity(metadata.count)
         var newNodesCount = 0
@@ -385,7 +385,7 @@ final class FileIndexer {
                 )
             }
 
-            let rules = workspace.rules
+            let rules = RuleRoleFilter.rules(for: workspace.role, from: workspace.rules)
             let ruleByName = Dictionary(uniqueKeysWithValues: rules.map { ($0.name, $0) })
             for id in movieNodeIDs {
                 guard let node = nodeByID[id] else { continue }
@@ -413,7 +413,7 @@ final class FileIndexer {
         guard let workspace = try? catalogCtx.fetch(descriptor).first else { return }
         let storeCtx = try storeManager.store(for: workspaceID).mainContext
 
-        let rules = workspace.rules
+        let rules = RuleRoleFilter.rules(for: workspace.role, from: workspace.rules)
         let nodes = (try? storeCtx.fetch(FetchDescriptor<FileNode>(
             predicate: #Predicate<FileNode> { $0.isPresent }
         ))) ?? []
@@ -446,7 +446,7 @@ final class FileIndexer {
         )
         guard let workspace = try? catalogCtx.fetch(descriptor).first else { return }
         let storeCtx = try storeManager.store(for: workspaceID).mainContext
-        let rules = workspace.rules
+        let rules = RuleRoleFilter.rules(for: workspace.role, from: workspace.rules)
         let ruleByName = Dictionary(uniqueKeysWithValues: rules.map { ($0.name, $0) })
         for node in nodes {
             applyRulesInline(to: node, rules: rules, ruleByName: ruleByName, ctx: storeCtx)

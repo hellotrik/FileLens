@@ -658,10 +658,17 @@ struct ContentView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             if let ws = selectedWorkspace {
                 pipelineToolbarItems(for: ws)
-                if !videoOperationTargets().isEmpty {
-                    videoTagToolbarItems(for: ws)
-                }
-                tagToolbarItems()
+                roleTagToolbarItems(for: ws)
+            }
+            if activityLog.isProgressActive {
+                ProgressView(
+                    value: activityLog.progressTotal > 0
+                        ? Double(activityLog.progressDone) / Double(activityLog.progressTotal)
+                        : nil
+                )
+                .controlSize(.small)
+                .frame(width: 64)
+                .help(activityLog.progressTitle ?? "")
             }
             Picker("View", selection: viewMode) {
                 Image(systemName: "square.grid.2x2").tag(ViewMode.grid)
@@ -714,6 +721,21 @@ struct ContentView: View {
         return resolveFileNodes(filesForCurrentSelection(workspace: ws))
     }
 
+    /// 按 workspace 角色只展示一种 Finder 标签工具，避免「文件夹 + 视频库」配置相同时两套菜单叠在一起。
+    @ViewBuilder
+    private func roleTagToolbarItems(for ws: Workspace) -> some View {
+        switch ws.role.finderTagToolbarMode {
+        case .ruleCategories:
+            tagToolbarItems()
+        case .videoMetadata:
+            if !videoOperationTargets().isEmpty {
+                videoTagToolbarItems(for: ws)
+            }
+        case .none:
+            EmptyView()
+        }
+    }
+
     /// 当前视图内的视频文件（选中优先，否则侧栏筛选下全部）。
     private func videoOperationTargets() -> [FileNode] {
         tagOperationTargets().filter { VideoFinderTagSyncService.isVideoNode($0) }
@@ -738,33 +760,51 @@ struct ContentView: View {
             }
             .disabled(!hasFinderTags)
         } label: {
-            Label("Video Tags", systemImage: "film")
+            Label("Finder Tags", systemImage: "tag.fill")
         }
-        .disabled(targets.isEmpty)
+        .disabled(targets.isEmpty || activityLog.isProgressActive)
         .help(NSLocalizedString("toolbar.videoFinderTags.help",
             value: "Apply or clear Finder color tags from video metadata (resolution, duration, codec, year)",
             comment: ""))
     }
 
+    private func finderTagProgressHandler() -> FinderTagProgressHandler {
+        { done, total, detail in
+            Task { @MainActor in
+                ActivityLog.shared.updateProgress(done: done, total: total, detail: detail)
+            }
+        }
+    }
+
     private func clearVideoFinderTagsAction(workspace ws: Workspace) {
         let targets = videoOperationTargets()
-        guard !targets.isEmpty else { return }
+        guard !targets.isEmpty, !activityLog.isProgressActive else { return }
 
         Task { @MainActor in
-            ActivityLog.shared.append(String(format:
+            let urls = FinderTagSyncService.buildClearJobs(nodes: targets)
+            guard !urls.isEmpty else { return }
+
+            activityLog.append(String(format:
                 NSLocalizedString("activity.videoFinderTags.clear.start.format",
                     value: "Clearing video Finder tags for “%@”…", comment: ""),
                 ws.effectiveName))
-            let urls = FinderTagSyncService.buildClearJobs(nodes: targets)
+            activityLog.startProgress(
+                title: NSLocalizedString("activity.videoFinderTags.progress.clear",
+                    value: "Clearing Finder tags…", comment: ""),
+                total: urls.count
+            )
+
             let report = await Task.detached(priority: .utility) {
-                FinderTagSyncService.runClear(urls: urls)
+                FinderTagSyncService.runClear(urls: urls, progress: finderTagProgressHandler())
             }.value
+
+            activityLog.endProgress()
 
             let failNote = report.failures.isEmpty
                 ? ""
                 : String(format: NSLocalizedString("activity.finderTags.failures.format",
                     value: " %lld failed.", comment: ""), Int64(report.failures.count))
-            ActivityLog.shared.append(String(format:
+            activityLog.append(String(format:
                 NSLocalizedString("activity.videoFinderTags.clear.done.format",
                     value: "Video Finder tags cleared on %lld file(s) in “%@”.%@", comment: ""),
                 Int64(report.affected), ws.effectiveName, failNote))
@@ -778,31 +818,72 @@ struct ContentView: View {
 
     private func applyVideoFinderTagsAction(workspace ws: Workspace) {
         let targets = videoOperationTargets()
-        guard !targets.isEmpty else { return }
+        guard !targets.isEmpty, !activityLog.isProgressActive else { return }
         let keys = ws.pipeline.enabledRuleKeys
 
         Task { @MainActor in
-            ActivityLog.shared.append(String(format:
+            let inputs = VideoFinderTagSyncService.makeInputs(from: targets)
+            guard !inputs.isEmpty else {
+                ToastCenter.shared.info(
+                    NSLocalizedString("tag.toast.videoFinderNone",
+                        value: "No video files in current view",
+                        comment: ""))
+                return
+            }
+
+            activityLog.append(String(format:
                 NSLocalizedString("activity.videoFinderTags.start.format",
                     value: "Writing video Finder tags for “%@”…", comment: ""),
                 ws.effectiveName))
-            let jobs = VideoFinderTagSyncService.buildApplyJobs(nodes: targets, enabledKeys: keys)
+            activityLog.startProgress(
+                title: NSLocalizedString("activity.videoFinderTags.progress.analyze",
+                    value: "Analyzing videos…", comment: ""),
+                total: inputs.count
+            )
+
+            let buildResult = await Task.detached(priority: .utility) {
+                VideoFinderTagSyncService.buildJobs(
+                    inputs: inputs,
+                    enabledKeys: keys,
+                    progress: finderTagProgressHandler()
+                )
+            }.value
+            let jobs = buildResult.jobs
+
             guard !jobs.isEmpty else {
+                activityLog.endProgress()
                 ToastCenter.shared.info(
                     NSLocalizedString("tag.toast.videoFinderNone",
                         value: "No video classifications to apply (check probe data and pipeline rules)",
                         comment: ""))
                 return
             }
+
+            if buildResult.probeTimeouts > 0 {
+                activityLog.append(String(format:
+                    NSLocalizedString("activity.videoFinderTags.probeTimeouts.format",
+                        value: "ffprobe timed out on %lld file(s); used file date fallback.", comment: ""),
+                    Int64(buildResult.probeTimeouts)))
+            }
+
+            activityLog.updateProgress(
+                done: 0,
+                total: jobs.count,
+                title: NSLocalizedString("activity.videoFinderTags.progress.write",
+                    value: "Writing Finder tags…", comment: "")
+            )
+
             let report = await Task.detached(priority: .utility) {
-                VideoFinderTagSyncService.runApply(jobs: jobs)
+                VideoFinderTagSyncService.runApply(jobs: jobs, progress: finderTagProgressHandler())
             }.value
+
+            activityLog.endProgress()
 
             let failNote = report.failures.isEmpty
                 ? ""
                 : String(format: NSLocalizedString("activity.finderTags.failures.format",
                     value: " %lld failed.", comment: ""), Int64(report.failures.count))
-            ActivityLog.shared.append(String(format:
+            activityLog.append(String(format:
                 NSLocalizedString("activity.videoFinderTags.done.format",
                     value: "Video Finder tags: %lld files in “%@”.%@", comment: ""),
                 Int64(report.affected), ws.effectiveName, failNote))
@@ -835,7 +916,7 @@ struct ContentView: View {
         } label: {
             Label("Finder Tags", systemImage: "tag.fill")
         }
-        .disabled(selectedWorkspace == nil || targets.isEmpty)
+        .disabled(selectedWorkspace == nil || targets.isEmpty || activityLog.isProgressActive)
         .help(NSLocalizedString("toolbar.finderTags.help",
             value: "Apply or clear macOS Finder color tags on selected files, or on all files in the current view when nothing is selected",
             comment: ""))
@@ -844,23 +925,33 @@ struct ContentView: View {
     private func clearFinderTagsAction() {
         guard let ws = selectedWorkspace else { return }
         let targets = tagOperationTargets()
-        guard !targets.isEmpty else { return }
+        guard !targets.isEmpty, !activityLog.isProgressActive else { return }
 
         Task { @MainActor in
-            ActivityLog.shared.append(String(format:
+            let urls = FinderTagSyncService.buildClearJobs(nodes: targets)
+            guard !urls.isEmpty else { return }
+
+            activityLog.append(String(format:
                 NSLocalizedString("activity.finderTags.clear.start.format",
                     value: "Clearing Finder tags for “%@”…", comment: ""),
                 ws.effectiveName))
-            let urls = FinderTagSyncService.buildClearJobs(nodes: targets)
+            activityLog.startProgress(
+                title: NSLocalizedString("activity.finderTags.progress.clear",
+                    value: "Clearing Finder tags…", comment: ""),
+                total: urls.count
+            )
+
             let report = await Task.detached(priority: .utility) {
-                FinderTagSyncService.runClear(urls: urls)
+                FinderTagSyncService.runClear(urls: urls, progress: finderTagProgressHandler())
             }.value
+
+            activityLog.endProgress()
 
             let failNote = report.failures.isEmpty
                 ? ""
                 : String(format: NSLocalizedString("activity.finderTags.failures.format",
                     value: " %lld failed.", comment: ""), Int64(report.failures.count))
-            ActivityLog.shared.append(String(format:
+            activityLog.append(String(format:
                 NSLocalizedString("activity.finderTags.clear.done.format",
                     value: "Finder tags cleared on %lld file(s) in “%@”.%@", comment: ""),
                 Int64(report.affected), ws.effectiveName, failNote))
@@ -876,10 +967,10 @@ struct ContentView: View {
         guard let ws = selectedWorkspace,
               let manager = storeManager else { return }
         let targets = tagOperationTargets()
-        guard !targets.isEmpty else { return }
+        guard !targets.isEmpty, !activityLog.isProgressActive else { return }
 
         Task { @MainActor in
-            ActivityLog.shared.append(String(format:
+            activityLog.append(String(format:
                 NSLocalizedString("activity.finderTags.start.format",
                     value: "Writing Finder tags for “%@”…", comment: ""),
                 ws.effectiveName))
@@ -893,15 +984,31 @@ struct ContentView: View {
             filesMemo.invalidate()
 
             let jobs = FinderTagSyncService.buildJobs(nodes: targets, rules: ws.rules)
+            guard !jobs.isEmpty else {
+                ToastCenter.shared.info(
+                    NSLocalizedString("tag.toast.finderNone",
+                        value: "No rule tags to write as Finder tags",
+                        comment: ""))
+                return
+            }
+
+            activityLog.startProgress(
+                title: NSLocalizedString("activity.finderTags.progress.write",
+                    value: "Writing Finder tags…", comment: ""),
+                total: jobs.count
+            )
+
             let report = await Task.detached(priority: .utility) {
-                FinderTagSyncService.run(jobs: jobs)
+                FinderTagSyncService.run(jobs: jobs, progress: finderTagProgressHandler())
             }.value
+
+            activityLog.endProgress()
 
             let failNote = report.failures.isEmpty
                 ? ""
                 : String(format: NSLocalizedString("activity.finderTags.failures.format",
                     value: " %lld failed.", comment: ""), Int64(report.failures.count))
-            ActivityLog.shared.append(String(format:
+            activityLog.append(String(format:
                 NSLocalizedString("activity.finderTags.done.format",
                     value: "Finder tags: %lld files in “%@”.%@", comment: ""),
                 Int64(report.affected), ws.effectiveName, failNote))

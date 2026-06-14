@@ -46,6 +46,7 @@
 		5A911C248FF0B771FCCEAF3A /* FileThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2F46B1AA14B9937DCEC6296 /* FileThumbnail.swift */; };
 		5BAAF6AAE09E73A8A84624C2 /* TagService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64CD4D5F370E300FF7435CFA /* TagService.swift */; };
 		5D6FDD3B75166C449DAFFB68 /* WorkspaceRole.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE6FF4ECE3611DCE6D1E8A7 /* WorkspaceRole.swift */; };
+		5E29760AD33EDE64F9BC1234 /* RuleRoleFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6F1E1F1909C0817F16E4A62 /* RuleRoleFilter.swift */; };
 		5E97EC6787AAB80887A79275 /* FileNodePredicateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89DE2779084BBD988881237F /* FileNodePredicateTests.swift */; };
 		611CF6A7F09A7C85F3E424F9 /* FinderSmartFolderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E59711ACCD29D565A12EEAD /* FinderSmartFolderService.swift */; };
 		634BA646758DCC9EA0AC3887 /* StoreMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 155A6BAEA16D45D6A694F583 /* StoreMigrationTests.swift */; };
@@ -201,6 +202,7 @@
 		BA91E9AF261309E44CC4AAEE /* ConfigIOTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigIOTests.swift; sourceTree = "<group>"; };
 		BCC3F00D5435C4A19E2F05D8 /* PreviewHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewHost.swift; sourceTree = "<group>"; };
 		C5D34978AB0F53933A90FDC7 /* FinderTagWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderTagWriter.swift; sourceTree = "<group>"; };
+		C6F1E1F1909C0817F16E4A62 /* RuleRoleFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleRoleFilter.swift; sourceTree = "<group>"; };
 		CAF2AC865EE658A9F893A604 /* VideoProbeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProbeService.swift; sourceTree = "<group>"; };
 		CB1CBF2EBC0BC77326091DEB /* CursorModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorModifier.swift; sourceTree = "<group>"; };
 		D01ADBD8847565700770570C /* VideoExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExtensions.swift; sourceTree = "<group>"; };
@@ -265,6 +267,7 @@
 				34A26BCAF8F3F34B7F601299 /* QuickLookCoordinator.swift */,
 				FD4B927888C55EEE3EF9DF42 /* RuleEngine.swift */,
 				43A6EE5ECCA3636AC3AA6BF6 /* RuleNameMigration.swift */,
+				C6F1E1F1909C0817F16E4A62 /* RuleRoleFilter.swift */,
 				44E75E7BFADBB610FFBADE45 /* StoreMigration.swift */,
 				9E2FF54453E865352A076683 /* StoreMigrationV2.swift */,
 				B74B74F30C5CE1723296EDE7 /* TagDisplay.swift */,
@@ -596,6 +599,7 @@
 				1B45C965EDEFC84DB5F55369 /* RuleEditorView.swift in Sources */,
 				7ADD9E1B0CE9222D4E420415 /* RuleEngine.swift in Sources */,
 				F9F4ED901FD9AC32EB430BC6 /* RuleNameMigration.swift in Sources */,
+				5E29760AD33EDE64F9BC1234 /* RuleRoleFilter.swift in Sources */,
 				B31538FE66265A9B016768D9 /* RuleTagPickerSheet.swift in Sources */,
 				E040CF68070AD71791C00E18 /* SettingsView.swift in Sources */,
 				64BB924545EC9CB42D0B24B5 /* SidebarView.swift in Sources */,

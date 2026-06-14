@@ -6,6 +6,7 @@
  *
  * @remarks 来源：蛊真人 · 《蛊真人》全诗词整理（完整版） · kairos-dao-header
  */
+import Darwin
 import Foundation
 
 /// 探针任务快照 — 在离开 MainActor 前从 `FileNode` 提取，供后台 ffprobe 使用。
@@ -25,6 +26,9 @@ struct VideoProbeResult: Sendable {
 }
 
 enum VideoProbeService {
+    /// 单文件 ffprobe 上限；网络盘或损坏文件否则会一直卡住。
+    static let defaultProbeTimeout: TimeInterval = 45
+
     /// GUI 启动的 macOS app 通常不带 shell 的 PATH（没有 `/opt/homebrew/bin`），
     /// 不能 rely on `/usr/bin/which` 或 `/usr/bin/env ffprobe`。
     private static let ffprobeCandidates = [
@@ -47,12 +51,19 @@ enum VideoProbeService {
     }
 
     /// 探测单个视频；失败返回仅含 mtime 的兜底或空 meta。
-    static func probe(at url: URL) -> VideoMeta {
+    static func probe(at url: URL, timeout: TimeInterval = defaultProbeTimeout) -> VideoMeta {
+        probeWithStatus(at: url, timeout: timeout).meta
+    }
+
+    static func probeWithStatus(
+        at url: URL,
+        timeout: TimeInterval = defaultProbeTimeout
+    ) -> (meta: VideoMeta, timedOut: Bool) {
         guard FileManager.default.isReadableFile(atPath: url.path) else {
-            return filesystemFallback(url: url)
+            return (filesystemFallback(url: url), false)
         }
         guard let ffprobe = ffprobeURL() else {
-            return filesystemFallback(url: url)
+            return (filesystemFallback(url: url), false)
         }
         let proc = Process()
         proc.executableURL = ffprobe
@@ -65,15 +76,35 @@ enum VideoProbeService {
         proc.standardError = FileHandle.nullDevice
         do {
             try proc.run()
-            proc.waitUntilExit()
+            guard waitForProcess(proc, timeout: timeout) else {
+                return (filesystemFallback(url: url), true)
+            }
             guard proc.terminationStatus == 0 else {
-                return filesystemFallback(url: url)
+                return (filesystemFallback(url: url), false)
             }
             let data = out.fileHandleForReading.readDataToEndOfFile()
-            return parseFFProbeJSON(data) ?? filesystemFallback(url: url)
+            let meta = parseFFProbeJSON(data) ?? filesystemFallback(url: url)
+            return (meta, false)
         } catch {
-            return filesystemFallback(url: url)
+            return (filesystemFallback(url: url), false)
         }
+    }
+
+    private static func waitForProcess(_ proc: Process, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while proc.isRunning {
+            if Date() >= deadline {
+                proc.terminate()
+                usleep(500_000)
+                if proc.isRunning {
+                    kill(proc.processIdentifier, SIGKILL)
+                    usleep(100_000)
+                }
+                return false
+            }
+            usleep(50_000)
+        }
+        return true
     }
 
     static func needsProbe(job: VideoProbeJob) -> Bool {

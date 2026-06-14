@@ -56,9 +56,13 @@ enum FinderTagSyncService {
         return jobs
     }
 
-    static func run(jobs: [Job]) -> FinderTagSyncReport {
+    static func run(
+        jobs: [Job],
+        progress: FinderTagProgressHandler? = nil
+    ) -> FinderTagSyncReport {
         var report = FinderTagSyncReport()
-        for job in jobs {
+        let total = jobs.count
+        for (index, job) in jobs.enumerated() {
             let entries = job.entries.map {
                 FinderTagWriter.TagEntry(
                     label: $0.label,
@@ -71,7 +75,9 @@ enum FinderTagSyncService {
             } catch {
                 report.failures.append((job.url.lastPathComponent, error.localizedDescription))
             }
+            progress?(index + 1, total, job.url.lastPathComponent)
         }
+        if total == 0 { progress?(0, 0, nil) }
         return report
     }
 
@@ -85,11 +91,16 @@ enum FinderTagSyncService {
         }
     }
 
-    static func runClear(urls: [URL]) -> FinderTagSyncReport {
+    static func runClear(
+        urls: [URL],
+        progress: FinderTagProgressHandler? = nil
+    ) -> FinderTagSyncReport {
         var report = FinderTagSyncReport()
-        for url in urls {
+        let total = urls.count
+        for (index, url) in urls.enumerated() {
             guard FinderTagWriter.hasTags(at: url) else {
                 report.skippedNoTags += 1
+                progress?(index + 1, total, url.lastPathComponent)
                 continue
             }
             do {
@@ -98,7 +109,9 @@ enum FinderTagSyncService {
             } catch {
                 report.failures.append((url.lastPathComponent, error.localizedDescription))
             }
+            progress?(index + 1, total, url.lastPathComponent)
         }
+        if total == 0 { progress?(0, 0, nil) }
         return report
     }
 }

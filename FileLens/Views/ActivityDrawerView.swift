@@ -53,6 +53,33 @@ struct ActivityDrawerView: View {
             }
             .buttonStyle(.plain)
 
+            if log.isProgressActive, let title = log.progressTitle {
+                VStack(alignment: .leading, spacing: 4) {
+                    ProgressView(
+                        value: log.progressTotal > 0
+                            ? Double(log.progressDone) / Double(log.progressTotal)
+                            : nil
+                    ) {
+                        Text(verbatim: title)
+                            .font(.caption)
+                    } currentValueLabel: {
+                        Text(verbatim: "\(log.progressDone) / \(log.progressTotal)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    .progressViewStyle(.linear)
+                    if let detail = log.progressDetail {
+                        Text(verbatim: detail)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 6)
+            }
+
             if log.isExpanded {
                 Divider()
                 ScrollView {

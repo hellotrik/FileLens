@@ -21,10 +21,38 @@ final class ActivityLog: ObservableObject {
 
     @Published private(set) var entries: [Entry] = []
     @Published var isExpanded = false
+    @Published private(set) var progressDone: Int = 0
+    @Published private(set) var progressTotal: Int = 0
+    @Published private(set) var progressTitle: String?
+    @Published private(set) var progressDetail: String?
+    @Published private(set) var isProgressActive: Bool = false
 
     private let maxEntries = 200
 
     private init() {}
+
+    func startProgress(title: String, total: Int) {
+        progressTitle = title
+        progressTotal = max(total, 1)
+        progressDone = 0
+        isProgressActive = true
+        isExpanded = true
+    }
+
+    func updateProgress(done: Int, total: Int? = nil, title: String? = nil, detail: String? = nil) {
+        progressDone = done
+        if let total { progressTotal = max(total, 1) }
+        if let title { progressTitle = title }
+        if let detail { progressDetail = detail }
+    }
+
+    func endProgress() {
+        isProgressActive = false
+        progressTitle = nil
+        progressDetail = nil
+        progressDone = 0
+        progressTotal = 0
+    }
 
     func append(_ message: String) {
         let entry = Entry(time: .now, message: message)

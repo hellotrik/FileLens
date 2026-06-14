@@ -38,6 +38,21 @@ enum WorkspaceRole: String, CaseIterable, Identifiable, Codable {
         case .library: return "film.stack"
         }
     }
+
+    /// 工具栏 Finder 标签模式：文件夹走规则分类，视频库走 ffprobe 四维标签，摄入源无。
+    enum FinderTagToolbarMode {
+        case ruleCategories
+        case videoMetadata
+        case none
+    }
+
+    var finderTagToolbarMode: FinderTagToolbarMode {
+        switch self {
+        case .watch:   return .ruleCategories
+        case .library: return .videoMetadata
+        case .inbox:   return .none
+        }
+    }
 }
 
 /// 管道配置（编码进 `Workspace.pipelineJSON`）。

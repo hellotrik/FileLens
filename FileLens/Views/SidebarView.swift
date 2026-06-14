@@ -269,7 +269,8 @@ struct SidebarView: View {
     }
 
     private func visibleRules(in ws: Workspace) -> [Rule] {
-        let sorted = ws.rules.sorted(by: { $0.priority < $1.priority })
+        let sorted = RuleRoleFilter.rules(for: ws.role, from: ws.rules)
+            .sorted(by: { $0.priority < $1.priority })
         if showEmptyRules { return sorted }
         return sorted.filter { filesCount(for: ws, rule: $0) > 0 }
     }
