@@ -9,10 +9,11 @@
 import Foundation
 import SwiftData
 
-/// 手动标签与 sidebar 计数。`FileTag.source == "manual"` 的规则在
-/// `FileIndexer.applyRulesInline` 里会被保留,不会被规则重算覆盖。
+/// 规则标签与 sidebar 计数。`FileTag.source == "pinned"` 为用户批量指定的
+/// 规则标签,在 `FileIndexer.applyRulesInline` 里保留;`source == "manual"`
+/// 为旧版手动标签,同样保留。
 enum TagService {
-    /// Inspector / sidebar 里区分于规则色的手动标签色。
+    /// 旧版手动标签色（仅兼容已有数据）。
     static let manualTagColorHex = "#6366F1"
 
     struct Statistics {
@@ -21,7 +22,56 @@ enum TagService {
         var uncategorized: Int = 0
     }
 
-    // MARK: - Manual tag CRUD
+    // MARK: - Rule tag (pinned)
+
+    /// 批量给文件打上规则标签；不跑条件，标记为 `pinned`，重算规则时保留。
+    @discardableResult
+    static func applyRuleTags(_ rules: [Rule], to files: [FileNode], context: ModelContext) -> Int {
+        guard !rules.isEmpty, !files.isEmpty else { return 0 }
+        var added = 0
+        for file in files {
+            for rule in rules {
+                if file.tags.contains(where: {
+                    $0.ruleID == rule.id && ($0.source == "pinned" || $0.source == "rule")
+                }) { continue }
+                let tag = FileTag(name: rule.name, source: "pinned", ruleID: rule.id)
+                tag.file = file
+                context.insert(tag)
+                file.tags.append(tag)
+                added += 1
+            }
+        }
+        return added
+    }
+
+    /// 移除所选文件上的自动规则标签与 pinned 标签；保留 legacy manual。
+    static func clearRuleTags(from files: [FileNode], context: ModelContext) {
+        guard !files.isEmpty else { return }
+        for file in files {
+            let toRemove = file.tags.filter { $0.source == "rule" || $0.source == "pinned" }
+            for tag in toRemove {
+                context.delete(tag)
+                file.tags.removeAll { $0.id == tag.id }
+            }
+        }
+    }
+
+    static func removePinnedTags(from files: [FileNode], names: Set<String>, context: ModelContext) {
+        guard !files.isEmpty, !names.isEmpty else { return }
+        for file in files {
+            let toRemove = file.tags.filter { $0.source == "pinned" && names.contains($0.name) }
+            for tag in toRemove {
+                context.delete(tag)
+                file.tags.removeAll { $0.id == tag.id }
+            }
+        }
+    }
+
+    static func fileHasRuleTag(_ file: FileNode) -> Bool {
+        file.tags.contains { $0.source == "rule" || $0.source == "pinned" }
+    }
+
+    // MARK: - Legacy manual tag CRUD
 
     static func normalizeManualTagName(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -79,7 +129,7 @@ enum TagService {
             var hasRule = false
             for tag in node.tags {
                 switch tag.source {
-                case "rule":
+                case "rule", "pinned":
                     if let rid = tag.ruleID {
                         hasRule = true
                         stats.ruleCounts[rid.uuidString, default: 0] += 1

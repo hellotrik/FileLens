@@ -31,7 +31,9 @@ struct InspectorSnapshot {
     struct TagInfo: Hashable {
         let name: String
         let colorHex: String
+        let isPinned: Bool
         let isManual: Bool
+        var isRemovable: Bool { isPinned || isManual }
     }
 
     let id: UUID
@@ -74,10 +76,11 @@ struct InspectorSnapshot {
         )
         self.tags = f.tags.map { tag in
             let isManual = tag.source == "manual"
+            let isPinned = tag.source == "pinned"
             let color = isManual
                 ? TagService.manualTagColorHex
                 : (colorByName[tag.name] ?? "#9CA3AF")
-            return TagInfo(name: tag.name, colorHex: color, isManual: isManual)
+            return TagInfo(name: tag.name, colorHex: color, isPinned: isPinned, isManual: isManual)
         }
     }
 }
@@ -190,33 +193,15 @@ struct InspectorView: View {
 
     @ViewBuilder
     private func tagsSection(for s: InspectorSnapshot) -> some View {
-        HStack {
-            Text("Tags").font(.caption).foregroundStyle(.secondary)
-            Spacer()
-            Button("Add Tag…") {
-                TagMenuBridge.onAddTag?(selectedFiles)
-            }
-            .font(.caption)
-        }
+        Text("Tags").font(.caption).foregroundStyle(.secondary)
         if s.tags.isEmpty {
             Text("No tags").foregroundStyle(.tertiary).font(.caption)
         } else {
             FlowTags(tags: s.tags) { tag in
-                guard tag.isManual, selectedFiles.count == 1, let file = selectedFiles.first else { return }
-                TagMenuBridge.onRemoveManualTag?(file, tag.name)
-            }
-        }
-        if selectedFiles.contains(where: { !$0.tags.isEmpty }) {
-            HStack(spacing: 12) {
-                Button("Clear Manual Tags", role: .destructive) {
-                    TagMenuBridge.onClearManualTags?(selectedFiles)
+                guard tag.isRemovable, selectedFiles.count == 1, let file = selectedFiles.first else { return }
+                if tag.isPinned {
+                    TagMenuBridge.onRemovePinnedTag?(file, tag.name)
                 }
-                .font(.caption)
-                .disabled(!selectedFiles.contains { $0.tags.contains { $0.source == "manual" } })
-                Button("Clear All Tags", role: .destructive) {
-                    TagMenuBridge.onClearAllTags?(selectedFiles)
-                }
-                .font(.caption)
             }
         }
     }
@@ -344,7 +329,7 @@ private struct InspectorActionButton: View {
 
 private struct FlowTags: View {
     let tags: [InspectorSnapshot.TagInfo]
-    var onRemoveManual: ((InspectorSnapshot.TagInfo) -> Void)?
+    var onRemove: ((InspectorSnapshot.TagInfo) -> Void)?
 
     var body: some View {
         FlowLayout(spacing: 6) {
@@ -360,9 +345,9 @@ private struct FlowTags: View {
                         Text(verbatim: TagDisplay.localizedName(tag.name))
                             .font(.caption)
                     }
-                    if tag.isManual, let onRemoveManual {
+                    if tag.isRemovable, let onRemove {
                         Button {
-                            onRemoveManual(tag)
+                            onRemove(tag)
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.caption2)

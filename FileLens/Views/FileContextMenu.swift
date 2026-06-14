@@ -27,8 +27,6 @@ struct FileContextMenu: View {
         if files.isEmpty {
             EmptyView()
         } else {
-            tagSection
-            Divider()
             ForEach(Array(FileActionGroup.allCases.enumerated()), id: \.offset) { idx, group in
                 ForEach(group.kinds) { kind in
                     if kind.isAvailable(for: files) {
@@ -45,21 +43,6 @@ struct FileContextMenu: View {
                 }
             }
         }
-    }
-
-    @ViewBuilder
-    private var tagSection: some View {
-        Button("Add Tag…") {
-            TagMenuBridge.onAddTag?(files)
-        }
-        Button("Clear Manual Tags", role: .destructive) {
-            TagMenuBridge.onClearManualTags?(files)
-        }
-        .disabled(!files.contains { $0.tags.contains { $0.source == "manual" } })
-        Button("Clear All Tags", role: .destructive) {
-            TagMenuBridge.onClearAllTags?(files)
-        }
-        .disabled(!files.contains { !$0.tags.isEmpty })
     }
 }
 

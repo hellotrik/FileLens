@@ -431,6 +431,10 @@ final class FileIndexer {
             }
         }
         try storeCtx.save()
+        let stats = TagService.computeStatistics(from: nodes)
+        TagService.applyStatistics(stats, presentCount: nodes.count, to: workspace)
+        workspace.scanGeneration &+= 1
+        try catalogCtx.save()
     }
 
     /// 仅对指定节点重算规则标签(手动改标 / 清空后局部恢复)。
@@ -466,15 +470,17 @@ final class FileIndexer {
         ruleByName: [String: Rule],
         ctx: ModelContext
     ) {
-        let manualTags = node.tags.filter { $0.source == "manual" }
+        let preserved = node.tags.filter { $0.source == "manual" || $0.source == "pinned" }
+        let pinnedRuleIDs = Set(preserved.compactMap(\.ruleID))
         for tag in node.tags where tag.source == "rule" {
             ctx.delete(tag)
         }
-        node.tags = manualTags
+        node.tags = preserved
 
         let names = RuleEngine.tags(for: node, rules: rules)
         for name in names {
             let rule = ruleByName[name]
+            if let rid = rule?.id, pinnedRuleIDs.contains(rid) { continue }
             let tag = FileTag(name: name, source: "rule", ruleID: rule?.id)
             tag.file = node
             ctx.insert(tag)

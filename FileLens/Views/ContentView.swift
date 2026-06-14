@@ -27,11 +27,6 @@ struct PendingWorkspace: Identifiable {
     let rules: [Rule]
 }
 
-private struct TagEditTarget: Identifiable {
-    let id = UUID()
-    let files: [FileNode]
-}
-
 struct ContentView: View {
     @State private var selectedWorkspace: Workspace?
     @State private var selection: SidebarSelection?
@@ -75,7 +70,6 @@ struct ContentView: View {
     @AppStorage("filelens.columnVisibility") private var columnVisibilityRaw: String = "automatic"
     /// 当前正在编辑设置的 workspace。打开 WorkspaceSettingsView sheet。
     @State private var editingWorkspace: Workspace?
-    @State private var tagEditTarget: TagEditTarget?
     @State private var pipelineOperation: PipelineOperation?
     @State private var pipelineRunning = false
     @ObservedObject private var activityLog = ActivityLog.shared
@@ -231,16 +225,6 @@ struct ContentView: View {
         }
         .sheet(item: $editingRule) { rule in
             ruleEditorSheet(rule: rule)
-        }
-        .sheet(item: $tagEditTarget) { target in
-            TagEditorSheet(
-                files: target.files,
-                onSave: { name in
-                    applyManualTag(name, to: target.files)
-                    tagEditTarget = nil
-                },
-                onCancel: { tagEditTarget = nil }
-            )
         }
         .sheet(item: $pipelineOperation) { op in
             PipelineOperationSheet(operation: op) {
@@ -487,38 +471,34 @@ struct ContentView: View {
     }
 
     private func installTagMenuBridge() {
-        TagMenuBridge.onAddTag = { files in
-            guard !files.isEmpty else { return }
-            tagEditTarget = TagEditTarget(files: files)
-        }
-        TagMenuBridge.onClearManualTags = { files in
-            clearManualTags(from: files)
-        }
-        TagMenuBridge.onClearAllTags = { files in
-            clearAllTags(from: files)
-        }
-        TagMenuBridge.onRemoveManualTag = { file, name in
-            removeManualTag(name, from: file)
+        TagMenuBridge.onRemovePinnedTag = { file, name in
+            removePinnedTag(name, from: file)
         }
     }
 
-    private func applyManualTag(_ rawName: String, to files: [FileNode]) {
+    private func reapplyRules(to files: [FileNode]) {
         guard let ws = selectedWorkspace,
-              let storeCtx = workspaceStoreContext(for: ws) else { return }
-        guard TagService.addManualTag(name: rawName, to: files, context: storeCtx) != nil else { return }
-        persistTagChanges(workspace: ws, storeCtx: storeCtx)
-        ToastCenter.shared.success(
-            NSLocalizedString("tag.toast.added", value: "Tag added", comment: "")
-        )
+              let manager = storeManager else { return }
+        do {
+            let indexer = FileIndexer(storeManager: manager)
+            try indexer.applyRules(to: files, workspaceID: ws.id)
+            filesMemo.invalidate()
+            ToastCenter.shared.success(
+                NSLocalizedString("tag.toast.rulesReapplied",
+                    value: "Rules re-applied", comment: "")
+            )
+        } catch {
+            ToastCenter.shared.error(error.localizedDescription)
+        }
     }
 
-    private func clearManualTags(from files: [FileNode]) {
+    private func clearRuleTags(from files: [FileNode]) {
         guard let ws = selectedWorkspace,
               let storeCtx = workspaceStoreContext(for: ws) else { return }
-        TagService.removeManualTags(from: files, context: storeCtx)
+        TagService.clearRuleTags(from: files, context: storeCtx)
         persistTagChanges(workspace: ws, storeCtx: storeCtx)
         ToastCenter.shared.info(
-            NSLocalizedString("tag.toast.manualCleared", value: "Manual tags cleared", comment: "")
+            NSLocalizedString("tag.toast.rulesCleared", value: "Rule tags cleared", comment: "")
         )
     }
 
@@ -540,10 +520,10 @@ struct ContentView: View {
         }
     }
 
-    private func removeManualTag(_ name: String, from file: FileNode) {
+    private func removePinnedTag(_ name: String, from file: FileNode) {
         guard let ws = selectedWorkspace,
               let storeCtx = workspaceStoreContext(for: ws) else { return }
-        TagService.removeManualTags(from: [file], names: [name], context: storeCtx)
+        TagService.removePinnedTags(from: [file], names: [name], context: storeCtx)
         persistTagChanges(workspace: ws, storeCtx: storeCtx)
     }
 
@@ -730,6 +710,7 @@ struct ContentView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             if let ws = selectedWorkspace {
                 pipelineToolbarItems(for: ws)
+                tagToolbarItems()
             }
             Picker("View", selection: viewMode) {
                 Image(systemName: "square.grid.2x2").tag(ViewMode.grid)
@@ -778,6 +759,73 @@ struct ContentView: View {
         }
         if pipelineRunning {
             ProgressView().controlSize(.small)
+        }
+    }
+
+    /// 将侧栏规则分类写入 macOS Finder 彩色标签（整文件夹，无需选中文件）。
+    @ViewBuilder
+    private func tagToolbarItems() -> some View {
+        Button {
+            syncFinderTagsAction()
+        } label: {
+            Label("Finder Tags", systemImage: "tag.fill")
+        }
+        .disabled(selectedWorkspace == nil)
+        .help(NSLocalizedString("toolbar.finderTags.help",
+            value: "Apply sidebar categories as Finder color tags to all files in this folder",
+            comment: ""))
+    }
+
+    private func syncFinderTagsAction() {
+        guard let ws = selectedWorkspace,
+              let manager = storeManager,
+              let storeCtx = workspaceStoreContext(for: ws) else { return }
+
+        Task { @MainActor in
+            ActivityLog.shared.append(String(format:
+                NSLocalizedString("activity.finderTags.start.format",
+                    value: "Writing Finder tags for “%@”…", comment: ""),
+                ws.effectiveName))
+            let indexer = FileIndexer(storeManager: manager)
+            do {
+                if selectedFileIDs.isEmpty {
+                    try await indexer.applyRules(workspaceID: ws.id)
+                } else {
+                    try indexer.applyRules(to: currentSelection, workspaceID: ws.id)
+                }
+            } catch {
+                ToastCenter.shared.error(error.localizedDescription)
+                return
+            }
+            filesMemo.invalidate()
+
+            let nodes: [FileNode]
+            if selectedFileIDs.isEmpty {
+                nodes = (try? storeCtx.fetch(FetchDescriptor<FileNode>(
+                    predicate: #Predicate<FileNode> { $0.isPresent }
+                ))) ?? []
+            } else {
+                nodes = currentSelection
+            }
+
+            let jobs = FinderTagSyncService.buildJobs(nodes: nodes, rules: ws.rules)
+            let report = await Task.detached(priority: .utility) {
+                FinderTagSyncService.run(jobs: jobs)
+            }.value
+
+            let failNote = report.failures.isEmpty
+                ? ""
+                : String(format: NSLocalizedString("activity.finderTags.failures.format",
+                    value: " %lld failed.", comment: ""), Int64(report.failures.count))
+            ActivityLog.shared.append(String(format:
+                NSLocalizedString("activity.finderTags.done.format",
+                    value: "Finder tags: %lld files in “%@”.%@", comment: ""),
+                Int64(report.tagged), ws.effectiveName, failNote))
+            activityLog.isExpanded = true
+            ToastCenter.shared.success(String(format:
+                NSLocalizedString("tag.toast.finderSynced.format",
+                    value: "Finder tags applied to %lld files", comment: ""),
+                Int64(report.tagged)))
         }
     }
 

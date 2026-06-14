@@ -70,6 +70,34 @@ final class TagServiceTests: XCTestCase {
         XCTAssertNil(file.rulesEvaluatedAt)
     }
 
+    func test_applyRuleTags_pins_without_conditions() throws {
+        let file = makeFile()
+        context.insert(file)
+        let rule = Rule(name: "Large", color: "#FF0000", enabled: true, priority: 10)
+        rule.conditions.append(Condition(field: "size", op: "gt", value: "999999999"))
+        context.insert(rule)
+
+        let added = TagService.applyRuleTags([rule], to: [file], context: context)
+        XCTAssertEqual(added, 1)
+        XCTAssertEqual(file.tags.count, 1)
+        XCTAssertEqual(file.tags.first?.source, "pinned")
+        XCTAssertEqual(file.tags.first?.ruleID, rule.id)
+    }
+
+    func test_clearRuleTags_keeps_manual() throws {
+        let file = makeFile()
+        context.insert(file)
+        let ruleID = UUID()
+        let ruleTag = FileTag(name: "PDF", source: "rule", ruleID: ruleID)
+        ruleTag.file = file
+        context.insert(ruleTag)
+        file.tags = [ruleTag]
+        _ = TagService.addManualTag(name: "Legacy", to: [file], context: context)
+
+        TagService.clearRuleTags(from: [file], context: context)
+        XCTAssertEqual(file.tags.map(\.name), ["Legacy"])
+    }
+
     func test_computeStatistics_counts_manual_and_uncategorized() throws {
         let a = makeFile(name: "a.txt")
         let b = makeFile(name: "b.txt")

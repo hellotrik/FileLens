@@ -22,6 +22,28 @@ enum FinderTagWriter {
         case blue = 4, yellow = 5, red = 6, orange = 7
     }
 
+    struct TagEntry: Sendable {
+        let label: String
+        let color: TagColor
+    }
+
+    /// 将 FileLens 规则色 (#RRGGBB) 映射到 Finder 七色标签。
+    static func colorFromRuleHex(_ hex: String) -> TagColor {
+        let h = hex.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch h {
+        case "#a78bfa", "#8b5cf6", "#ec4899": return .purple
+        case "#3b82f6", "#2563eb", "#0ea5e9": return .blue
+        case "#10b981", "#059669", "#16a34a", "#22c55e": return .green
+        case "#ef4444", "#dc2626": return .red
+        case "#f59e0b", "#f97316": return .orange
+        case "#eab308", "#fbbf24": return .yellow
+        case "#6b7280", "#9ca3af", "#a3a3a3": return .gray
+        default:
+            let n = abs(h.hashValue)
+            return TagColor(rawValue: UInt8((n % 7) + 1)) ?? .gray
+        }
+    }
+
     static func pickColor(forDimension dimension: String) -> TagColor {
         switch dimension {
         case "分辨率", "Resolution": return .blue
@@ -32,17 +54,22 @@ enum FinderTagWriter {
         }
     }
 
-    static func mergeTags(into url: URL, classifications: [VideoClassification]) throws {
+    static func mergeTags(into url: URL, entries: [TagEntry]) throws {
         var merged = Set(readExistingTags(at: url))
-        for c in classifications {
-            let label = c.tagLabel()
-            let color = pickColor(forDimension: c.dimension)
-            merged.insert("\(label)\n\(color.rawValue)")
+        for e in entries {
+            merged.insert("\(e.label)\n\(e.color.rawValue)")
         }
         let arr = merged.sorted().map { $0 as NSString }
         let plist = arr as NSArray
         let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
         try setXattr(path: url.path, name: xattrName, data: data)
+    }
+
+    static func mergeTags(into url: URL, classifications: [VideoClassification]) throws {
+        let entries = classifications.map {
+            TagEntry(label: $0.tagLabel(), color: pickColor(forDimension: $0.dimension))
+        }
+        try mergeTags(into: url, entries: entries)
     }
 
     static func readExistingTags(at url: URL) -> [String] {

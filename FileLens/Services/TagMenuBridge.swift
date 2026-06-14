@@ -12,8 +12,5 @@ import SwiftData
 /// `FileContextMenu`(NSTableView cell 的 NSHostingView 拿不到外层 Environment)。
 @MainActor
 enum TagMenuBridge {
-    static var onAddTag: (([FileNode]) -> Void)?
-    static var onClearManualTags: (([FileNode]) -> Void)?
-    static var onClearAllTags: (([FileNode]) -> Void)?
-    static var onRemoveManualTag: ((FileNode, String) -> Void)?
+    static var onRemovePinnedTag: ((FileNode, String) -> Void)?
 }

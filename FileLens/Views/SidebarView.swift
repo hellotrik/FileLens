@@ -235,15 +235,6 @@ struct SidebarView: View {
                 reorderRules(in: ws, fromOffsets: source, toOffset: destination)
             }
 
-            ForEach(manualTagNames(in: ws), id: \.self) { name in
-                tagRow(
-                    text: name,
-                    count: manualTagCount(for: ws, name: name),
-                    color: Color(hexString: TagService.manualTagColorHex)
-                )
-                .tag(SidebarSelection.manualTag(workspaceID: ws.id, name: name))
-            }
-
             if uncategorizedCount(for: ws) > 0 {
                 rowLabel(
                     text: NSLocalizedString("Unfiled", value: "Unfiled", comment: ""),
