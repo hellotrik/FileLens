@@ -181,7 +181,6 @@ private struct GeneralSettingsView: View {
 
     @AppStorage("filelens.appearance") private var appearanceRaw: String = AppearancePreference.system.rawValue
     @AppStorage("filelens.language") private var languageRaw: String = LanguagePreference.system.rawValue
-    @AppStorage("filelens.autoCheckUpdate") private var autoCheckUpdate: Bool = true
     @State private var showingLanguageRestartAlert = false
 
     var body: some View {
@@ -209,11 +208,6 @@ private struct GeneralSettingsView: View {
                     }
                     showingLanguageRestartAlert = true
                 }
-            }
-
-            // 自动检查更新留在通用,自动展开 inspector / 菜单栏模式 都挪去偏好
-            Section {
-                Toggle("settings.autoCheckUpdate", isOn: $autoCheckUpdate)
             }
 
             // 配置导入导出
@@ -384,10 +378,6 @@ private struct SupportSettingsView: View {
 // MARK: - About
 
 private struct AboutSettingsView: View {
-    @State private var checking = false
-    @State private var updateInfo: UpdateInfo?
-    @State private var checkResultMessage: String?
-
     private var version: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
     }
@@ -418,44 +408,6 @@ private struct AboutSettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4)
 
-            // Check for updates row
-            HStack(spacing: 8) {
-                Button {
-                    Task { await checkUpdate() }
-                } label: {
-                    if checking {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text("Check for Updates")
-                    }
-                }
-                .disabled(checking)
-                .pointingHandCursor()
-                if let msg = checkResultMessage {
-                    Text(verbatim: msg).font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .padding(.top, 6)
-            .alert("update.available.title", isPresented: Binding(
-                get: { updateInfo != nil },
-                set: { if !$0 { updateInfo = nil } }
-            ), presenting: updateInfo) { info in
-                Button("update.download") {
-                    if let url = URL(string: info.releaseURL) {
-                        NSWorkspace.shared.open(url)
-                    }
-                    updateInfo = nil
-                }
-                Button("Cancel", role: .cancel) { updateInfo = nil }
-            } message: { info in
-                Text(verbatim: String(format:
-                    NSLocalizedString("update.available.message.format",
-                        value: "A new version %@ is available.",
-                        comment: ""), info.latestTag))
-            }
-
-            // Only Check Updates (above) + Website here. Sponsor / GitHub /
-            // Feedback all live on the dedicated Support tab now.
             Link(destination: URL(string: "https://www.lifedever.com")!) {
                 Label("about.website", systemImage: "globe")
             }
@@ -467,18 +419,5 @@ private struct AboutSettingsView: View {
         .padding(.vertical, 24)
         .frame(maxWidth: .infinity)
         .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func checkUpdate() async {
-        checking = true
-        checkResultMessage = nil
-        defer { checking = false }
-        let info = await UpdateChecker.shared.checkForUpdate(currentVersion: version)
-        if let info {
-            updateInfo = info
-        } else {
-            checkResultMessage = NSLocalizedString("update.uptodate",
-                value: "You're on the latest version.", comment: "")
-        }
     }
 }

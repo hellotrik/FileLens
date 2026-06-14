@@ -15,9 +15,6 @@ private struct AddFolderActionKey: FocusedValueKey {
 private struct NewRuleActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
-private struct CheckUpdateActionKey: FocusedValueKey {
-    typealias Value = () -> Void
-}
 private struct ActiveWorkspaceNameKey: FocusedValueKey {
     typealias Value = String
 }
@@ -33,10 +30,6 @@ extension FocusedValues {
     var newRuleAction: (() -> Void)? {
         get { self[NewRuleActionKey.self] }
         set { self[NewRuleActionKey.self] = newValue }
-    }
-    var checkUpdateAction: (() -> Void)? {
-        get { self[CheckUpdateActionKey.self] }
-        set { self[CheckUpdateActionKey.self] = newValue }
     }
     /// Name of the workspace currently shown in the active window. nil means
     /// no workspace is selected — workspace-scoped commands (e.g. New Rule)
@@ -57,7 +50,6 @@ struct FileLensCommands: Commands {
     @FocusedValue(\.addFolderAction) private var addFolder
     @FocusedValue(\.newRuleAction) private var newRule
     @FocusedValue(\.videoToolsAction) private var videoTools
-    @FocusedValue(\.checkUpdateAction) private var checkUpdate
     @FocusedValue(\.activeWorkspaceName) private var workspaceName
     /// Mirrored in SidebarView so the two stay in sync — UserDefaults is
     /// the single source of truth.
@@ -99,14 +91,6 @@ struct FileLensCommands: Commands {
             }
             .keyboardShortcut("v", modifiers: [.command, .shift])
             .disabled(videoTools == nil)
-        }
-
-        CommandGroup(after: .appInfo) {
-            Button {
-                UpdateService.checkAndPrompt()
-            } label: {
-                Text("Check for Updates…")
-            }
         }
 
         // 在 View 菜单 sidebar 项之后插一个 "Show Empty Rules" 开关。

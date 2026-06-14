@@ -68,12 +68,8 @@ struct FileLensApp: App {
                     }
                     // 上次会话强退留下的"卡在索引中"状态 + 未完成 deletion 清理
                     WorkspaceStateRecovery.runIfNeeded(storeManager: storeManager)
-                    // Silent update probe — only nags if there's a newer
-                    // release and we haven't checked in the last 24h.
-                    UpdateService.checkInBackgroundIfNeeded()
                 }
                 .modifier(MainWindowProxyInstaller())
-                .updateSheet()
                 .environment(\.workspaceStoreManager, storeManager)
         }
         .modelContainer(container)
