@@ -1,67 +1,14 @@
 /**
- * 熏香咒
- *
- * 天辅无私，乾象通微。
- * 无幽无冥，无感不知。
- * 佩带符图，神兵任呼。
- * 我道上皇，位登仙都。
- * 急急如律令。
- *
- * @remarks 来源：太上三洞神咒卷之六 · https://zh.wikisource.org/wiki/太上三洞神呪/6 · kairos-dao-header
+ * 编排 video 整理 / 改名（探针由 FileIndexer 负责）。
  */
 import Foundation
 import SwiftData
 
-/// 编排 video-tools 全流程：扫描源 → 归集 →（由 FileIndexer 探针）→ 整理 → 改名。
 @MainActor
 enum VideoPipelineRunner {
-    struct ScanCollectResult {
-        var found: Int
-        var collected: Int
-        var failed: Int
-        var log: [String]
-    }
-
-    // MARK: - Workspace 管道
-
     static func folderURL(for workspace: Workspace) throws -> URL {
         let (url, _) = try BookmarkStore.resolve(bookmark: workspace.bookmarkData)
         return url
-    }
-
-    static func planCollect(inbox: Workspace) async -> [CollectPlanItem] {
-        do {
-            let source = try folderURL(for: inbox)
-            var items: [CollectPlanItem] = []
-            VideoScanWalker.walkVideos(in: [source]) { _ in } onHit: { url in
-                items.append(CollectPlanItem(url: url, fileName: url.lastPathComponent))
-            }
-            return items
-        } catch {
-            return []
-        }
-    }
-
-    static func executeCollect(
-        sources: [URL],
-        library: Workspace,
-        onProgress: ((String) -> Void)? = nil
-    ) async -> ScanCollectResult {
-        var log: [String] = []
-        do {
-            let repo = try folderURL(for: library)
-            guard !sources.isEmpty else {
-                return ScanCollectResult(found: 0, collected: 0, failed: 0, log: ["无选中文件"])
-            }
-            onProgress?("归集 \(sources.count) 个文件…")
-            let (ok, errs) = await Task.detached(priority: .userInitiated) {
-                VideoCollectService.collect(sources: sources, repository: repo) { _ in }
-            }.value
-            log.append("归集成功 \(ok.count)，失败 \(errs.count)")
-            return ScanCollectResult(found: sources.count, collected: ok.count, failed: errs.count, log: log)
-        } catch {
-            return ScanCollectResult(found: 0, collected: 0, failed: 1, log: [error.localizedDescription])
-        }
     }
 
     static func previewOrganizeCount(library: Workspace) -> Int {

@@ -39,7 +39,6 @@ struct WorkspaceSettingsView: View {
     @State private var extraIgnoreFolders: String
     @State private var watchEnabled: Bool
     @State private var role: WorkspaceRole
-    @State private var linkedLibraryUUID: UUID?
     @State private var pipeline: WorkspacePipelineConfig
     @State private var organizeMethod: VideoOrganizeMethod
 
@@ -55,7 +54,6 @@ struct WorkspaceSettingsView: View {
         _extraIgnoreFolders = State(initialValue: snap.extraIgnoreFolders)
         _watchEnabled = State(initialValue: snap.watchEnabled)
         _role = State(initialValue: snap.role)
-        _linkedLibraryUUID = State(initialValue: snap.linkedLibraryUUID)
         _pipeline = State(initialValue: snap.pipeline)
         _organizeMethod = State(initialValue: VideoOrganizeMethod.from(stored: snap.pipeline.organizeMethod))
     }
@@ -222,17 +220,6 @@ struct WorkspaceSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if role == .inbox {
-                Section("workspace.settings.pipeline.collectTarget") {
-                    Picker("workspace.settings.pipeline.library", selection: $linkedLibraryUUID) {
-                        Text("workspace.settings.pipeline.library.none").tag(UUID?.none)
-                        ForEach(libraryWorkspaces) { lib in
-                            Text(verbatim: lib.effectiveName).tag(Optional(lib.id))
-                        }
-                    }
-                }
-            }
-
             if role == .library {
                 Section("workspace.settings.pipeline.organize") {
                     Picker("workspace.settings.pipeline.method", selection: $organizeMethod) {
@@ -266,19 +253,12 @@ struct WorkspaceSettingsView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var libraryWorkspaces: [Workspace] {
-        allWorkspaces.filter { $0.id != workspace.id && $0.role == .library }
-    }
-
     private var roleFooter: String {
         switch role {
         case .watch:
             return NSLocalizedString("workspace.settings.role.watch.hint",
                 value: "Browse and tag files. Toolbar Finder Tags follow sidebar rules (Images, PDF, …).",
                 comment: "")
-        case .inbox:
-            return NSLocalizedString("workspace.settings.role.inbox.hint",
-                value: "Video intake folder. Use toolbar Collect to move files into a library.", comment: "")
         case .library:
             return NSLocalizedString("workspace.settings.role.library.hint",
                 value: "Video library with ffprobe. Toolbar Finder Tags use metadata (resolution, duration, codec, year)—not sidebar rule names.",
@@ -412,7 +392,6 @@ struct WorkspaceSettingsView: View {
         workspace.extraIgnoreFolders = extraIgnoreFolders
         workspace.watchEnabled = watchEnabled
         workspace.role = role
-        workspace.linkedLibraryUUID = linkedLibraryUUID
         var savedPipeline = pipeline
         savedPipeline.organizeMethod = organizeMethod.rawValue
         workspace.pipeline = savedPipeline
@@ -435,7 +414,6 @@ struct WorkspaceSettingsView: View {
             extraIgnoreFolders != initialSnapshot.extraIgnoreFolders ||
             watchEnabled != initialSnapshot.watchEnabled ||
             role != initialSnapshot.role ||
-            linkedLibraryUUID != initialSnapshot.linkedLibraryUUID ||
             savedPipeline != initialSnapshot.pipeline
 
         if needsRescan {
@@ -451,7 +429,6 @@ struct WorkspaceSettingsView: View {
         let extraIgnoreFolders: String
         let watchEnabled: Bool
         let role: WorkspaceRole
-        let linkedLibraryUUID: UUID?
         let pipeline: WorkspacePipelineConfig
 
         init(_ ws: Workspace) {
@@ -462,7 +439,6 @@ struct WorkspaceSettingsView: View {
             extraIgnoreFolders = ws.extraIgnoreFolders
             watchEnabled = ws.watchEnabled
             role = ws.role
-            linkedLibraryUUID = ws.linkedLibraryUUID
             pipeline = ws.pipeline
         }
     }

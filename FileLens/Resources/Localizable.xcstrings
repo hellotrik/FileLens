@@ -86,11 +86,39 @@
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "FileLens 会扫描这个文件夹，按下面的规则自动给每个文件归类。所有规则之后都能在侧栏修改 / 关闭。" } }
       }
     },
+    "picker.subtitle.unified" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose folder or video library, then pick which rules to apply. You can change these later in the sidebar." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "选择「文件夹」或「视频库」，再勾选要启用的规则。之后可在侧栏随时修改。" } }
+      }
+    },
+    "picker.role" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Type" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "类型" } }
+      }
+    },
     "picker.recommendation" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Not sure? Just click “Use these rules”. The defaults work for most folders, and you can always tweak them later." } },
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "不知道选什么？直接点【使用这些规则】就行。默认配置对大多数场景够用，之后随时能改。" } }
+      }
+    },
+    "picker.recommendation.watch" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Folder mode: tag files by type (images, PDF, code…). Finder tags follow sidebar rules." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "文件夹模式：按类型归类（图片、PDF、代码…），Finder 标签跟随侧栏规则。" } }
+      }
+    },
+    "picker.recommendation.library" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Video library: ffprobe classifies by resolution, duration, codec, and year. Recursive scan is on by default." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "视频库模式：ffprobe 按分辨率、时长、编码、年份分类，默认递归扫描整个目录。" } }
       }
     },
     "picker.selected.format" : {
@@ -1868,7 +1896,14 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Off by default for shallow folders like Downloads" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "默认关闭(Downloads 等浅目录适用)" } }
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "默认关闭（Downloads 等浅目录适用）" } }
+      }
+    },
+    "picker.recursive.libraryHint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Recommended for video libraries with nested folders" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "视频库建议开启，以扫描子目录中的视频" } }
       }
     },
     "workspace.contextmenu.settings" : {

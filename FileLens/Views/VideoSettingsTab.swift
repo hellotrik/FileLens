@@ -7,12 +7,11 @@
  */
 import SwiftUI
 
-/// 设置 → Video：全局依赖与管道向导（路径在 Workspace 管道 Tab）。
+/// 设置 → Video：ffprobe 依赖说明。
 struct VideoSettingsTab: View {
     @Environment(\.modelContext) private var modelContext
     @State private var ffprobeOK = VideoProbeService.isAvailable()
     @State private var importStatus: String?
-    @State private var showSetup = false
 
     var body: some View {
         Form {
@@ -32,12 +31,9 @@ struct VideoSettingsTab: View {
             }
 
             Section("video.settings.pipeline") {
-                Text("video.settings.pipeline.hint")
+                Text("video.settings.addFolder.hint")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button("video.settings.setup") {
-                    showSetup = true
-                }
                 Button("Show Activity Log") {
                     NotificationCenter.default.post(name: .toggleActivityLog, object: nil)
                 }
@@ -58,11 +54,6 @@ struct VideoSettingsTab: View {
         }
         .formStyle(.grouped)
         .padding()
-        .sheet(isPresented: $showSetup) {
-            VideoSetupSheet {
-                NotificationCenter.default.post(name: .videoSetupCompleted, object: nil)
-            }
-        }
     }
 
     private func importLegacy() {
@@ -72,7 +63,6 @@ struct VideoSettingsTab: View {
                 ffprobeOK = VideoProbeService.isAvailable()
                 ActivityLog.shared.append(msg)
                 ActivityLog.shared.isExpanded = true
-                NotificationCenter.default.post(name: .videoSetupCompleted, object: nil)
             }
         } catch {
             importStatus = error.localizedDescription
@@ -82,5 +72,4 @@ struct VideoSettingsTab: View {
 
 extension Notification.Name {
     static let toggleActivityLog = Notification.Name("filelens.toggleActivityLog")
-    static let videoSetupCompleted = Notification.Name("filelens.videoSetupCompleted")
 }

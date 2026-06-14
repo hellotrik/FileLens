@@ -171,7 +171,7 @@ struct SidebarView: View {
     // MARK: Helpers
 
     private var groupedRoles: [WorkspaceRole] {
-        [.library, .inbox, .watch]
+        [.library, .watch]
     }
 
     private func workspaces(for role: WorkspaceRole) -> [Workspace] {

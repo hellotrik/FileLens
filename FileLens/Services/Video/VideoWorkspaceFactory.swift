@@ -1,14 +1,9 @@
 /**
- * 移山
- *
- * 搬运山岳、改易地脉；用于大规模地形与物体位移（设定）。
- *
- * @remarks 来源：天罡三十六法 · https://baike.baidu.com/item/%E5%A4%A9%E7%BD%A1%E4%B8%89%E5%8D%81%E5%85%AD%E6%B3%95/60754650 · kairos-dao-header
+ * 创建 / 查找视频库 workspace（与「添加文件夹」同一套选目录 + 规则流程）。
  */
 import Foundation
 import SwiftData
 
-/// 创建 / 查找视频库与摄入源 workspace。
 enum VideoWorkspaceFactory {
     static func normalizedPath(_ path: String) -> String {
         (path as NSString).expandingTildeInPath
@@ -31,6 +26,7 @@ enum VideoWorkspaceFactory {
             ws.role = .library
             ws.pipeline = pipeline
             ws.recursive = true
+            ws.linkedLibraryUUID = nil
             attachVideoRulesIfNeeded(to: ws, context: context)
             return ws
         }
@@ -56,17 +52,15 @@ enum VideoWorkspaceFactory {
     }
 
     @discardableResult
-    static func ensureInbox(
+    static func ensureWatchFolder(
         at url: URL,
-        linkedLibrary: Workspace?,
         context: ModelContext,
         existing: [Workspace],
         sortOrder: Int
     ) throws -> Workspace {
         if let ws = findWorkspace(matchingPath: url.path, in: existing) {
-            ws.role = .inbox
-            ws.recursive = true
-            if let linkedLibrary { ws.linkedLibraryUUID = linkedLibrary.id }
+            ws.role = .watch
+            ws.linkedLibraryUUID = nil
             return ws
         }
         let bookmark = try BookmarkStore.makeBookmark(for: url)
@@ -76,11 +70,14 @@ enum VideoWorkspaceFactory {
             bookmarkData: bookmark,
             sortOrder: sortOrder,
             recursive: true,
-            displayName: url.lastPathComponent,
-            roleRaw: WorkspaceRole.inbox.rawValue
+            roleRaw: WorkspaceRole.watch.rawValue
         )
-        ws.linkedLibraryUUID = linkedLibrary?.id
         context.insert(ws)
+        for rule in BuiltInRules.all() {
+            rule.workspace = ws
+            context.insert(rule)
+            for c in rule.conditions { context.insert(c) }
+        }
         return ws
     }
 

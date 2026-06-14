@@ -25,7 +25,6 @@
 		2B2803C9CCB8417011E4A5AB /* ImagePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B17FC436F06F9B0356C4BD8 /* ImagePreview.swift */; };
 		2C7AA149CB06286CD4BBEA37 /* FileTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3054ED561401B7D6A12CF88 /* FileTableView.swift */; };
 		303A0445741E756661A3B350 /* WelcomeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7172EEC5BB032BFCDF940A7E /* WelcomeSheet.swift */; };
-		3175CB75E9C461608DF6C5E9 /* VideoCollectService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62EB61D9B058BC9DE1333E45 /* VideoCollectService.swift */; };
 		32B594F0525E9A0309B08E03 /* Rule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2827FC740B9A4FB3B0E74B77 /* Rule.swift */; };
 		334F46F612A25BD889FEEAAE /* WorkspaceViewSettingsMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00716DBF951063840BAA849 /* WorkspaceViewSettingsMigrationTests.swift */; };
 		35DAAE680BD7C5AC076D0672 /* StoreMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44E75E7BFADBB610FFBADE45 /* StoreMigration.swift */; };
@@ -96,7 +95,6 @@
 		DD52D7BF0E733B1B36456D3A /* QuickLookCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A26BCAF8F3F34B7F601299 /* QuickLookCoordinator.swift */; };
 		E040CF68070AD71791C00E18 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50BA494FE9DF215ED4759FB8 /* SettingsView.swift */; };
 		E4CEAF3C49D444C42335A4B3 /* FileIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D512404F714AB5C047E39035 /* FileIndexer.swift */; };
-		E886976B00CCB438AB748607 /* VideoSetupSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B0F286A405BF1E290B6FAE6 /* VideoSetupSheet.swift */; };
 		EBFFF35103B793731B8B7D34 /* FileURLResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F54719CEBE12810F03A1EA0 /* FileURLResolver.swift */; };
 		ED84E9FCBE25FCF9D7CC01E2 /* ConfigIOTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA91E9AF261309E44CC4AAEE /* ConfigIOTests.swift */; };
 		F090A71C8D9ED6D527B6ACC7 /* ConditionEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B799D07B0CA5F7C128D52050 /* ConditionEvaluator.swift */; };
@@ -148,7 +146,6 @@
 		5DE16EA8F33244232D877BD8 /* FileActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileActions.swift; sourceTree = "<group>"; };
 		5F54719CEBE12810F03A1EA0 /* FileURLResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileURLResolver.swift; sourceTree = "<group>"; };
 		61079B3D84C5E672AD319E0C /* QuickLookPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLookPreview.swift; sourceTree = "<group>"; };
-		62EB61D9B058BC9DE1333E45 /* VideoCollectService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoCollectService.swift; sourceTree = "<group>"; };
 		64CD4D5F370E300FF7435CFA /* TagService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagService.swift; sourceTree = "<group>"; };
 		66A147E9B1C7969B49E9F90B /* CommandPaletteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPaletteView.swift; sourceTree = "<group>"; };
 		6809B84FD4ECE32202A026DE /* RuleEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleEngineTests.swift; sourceTree = "<group>"; };
@@ -171,7 +168,6 @@
 		916AD25C5BE879DF69AE58DE /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		96D9E9F8EE0495017F38D06E /* FirstRunRulePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstRunRulePicker.swift; sourceTree = "<group>"; };
 		99A9BA082F3BF04C3E45EF10 /* WorkspaceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSettingsView.swift; sourceTree = "<group>"; };
-		9B0F286A405BF1E290B6FAE6 /* VideoSetupSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSetupSheet.swift; sourceTree = "<group>"; };
 		9B1E79EB800BF7F6A081E690 /* KindClassifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KindClassifierTests.swift; sourceTree = "<group>"; };
 		9BDFC79CD7F350521E290383 /* FileGridView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileGridView.swift; sourceTree = "<group>"; };
 		9D7499DA1E1D36C3B1CF3285 /* UnsupportedPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsupportedPreview.swift; sourceTree = "<group>"; };
@@ -380,7 +376,6 @@
 				50BA494FE9DF215ED4759FB8 /* SettingsView.swift */,
 				5CAA54EFF677ED6497E10C6E /* SidebarView.swift */,
 				69A304FAECAF836E95C327BA /* VideoSettingsTab.swift */,
-				9B0F286A405BF1E290B6FAE6 /* VideoSetupSheet.swift */,
 				7172EEC5BB032BFCDF940A7E /* WelcomeSheet.swift */,
 				99A9BA082F3BF04C3E45EF10 /* WorkspaceSettingsView.swift */,
 				377F8087817DA0458FD221E5 /* Preview */,
@@ -394,7 +389,6 @@
 				1E59711ACCD29D565A12EEAD /* FinderSmartFolderService.swift */,
 				C5D34978AB0F53933A90FDC7 /* FinderTagWriter.swift */,
 				8D7A0BFE992B5F83F31A80ED /* VideoClassification.swift */,
-				62EB61D9B058BC9DE1333E45 /* VideoCollectService.swift */,
 				4531B1E32EE72D065BD454E8 /* VideoConfigImporter.swift */,
 				D01ADBD8847565700770570C /* VideoExtensions.swift */,
 				51D925A8C752A74EB513E9CA /* VideoFinderTagSyncService.swift */,
@@ -599,7 +593,6 @@
 				751E64C7F0908F5C0AAEF373 /* Toast.swift in Sources */,
 				B3AE2A3D7BE157A3AF20F116 /* UnsupportedPreview.swift in Sources */,
 				20CF88FB81378D58B3429397 /* VideoClassification.swift in Sources */,
-				3175CB75E9C461608DF6C5E9 /* VideoCollectService.swift in Sources */,
 				3B2AEE442B50D09DA915DB8E /* VideoConfigImporter.swift in Sources */,
 				AD0F3FDCF2E09DF1BCA9677F /* VideoExtensions.swift in Sources */,
 				0CB88D0190E08A2F47F8F384 /* VideoFinderTagSyncService.swift in Sources */,
@@ -612,7 +605,6 @@
 				49B29D30B5B16299021381A8 /* VideoScanWalker.swift in Sources */,
 				0F42F789B8F33B6E98F93423 /* VideoSettings.swift in Sources */,
 				12945D2CF729E56496BCADCA /* VideoSettingsTab.swift in Sources */,
-				E886976B00CCB438AB748607 /* VideoSetupSheet.swift in Sources */,
 				759EED4E24FA8B794A368725 /* VideoWorkspaceFactory.swift in Sources */,
 				303A0445741E756661A3B350 /* WelcomeSheet.swift in Sources */,
 				97A7EC8B05EFDB6A1442B25B /* Workspace.swift in Sources */,

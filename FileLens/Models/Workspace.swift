@@ -109,10 +109,10 @@ final class Workspace {
     /// 用 Int 防 wrap;每天几百次 scan 也要 N 亿年才溢出。
     var scanGeneration: Int = 0
 
-    /// Workspace 角色：`watch` 只看不动 / `inbox` 视频摄入 / `library` 归集库。
+    /// Workspace 角色：`watch` 文件夹 / `library` 视频库。
     var roleRaw: String = WorkspaceRole.watch.rawValue
 
-    /// inbox 归集目标（library workspace 的 id 字符串）。
+    /// 遗留字段（原 inbox 归集目标），已不再使用。
     var linkedLibraryID: String = ""
 
     /// 管道 JSON（整理方式、规则键、改名默认、探针开关）。

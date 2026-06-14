@@ -2,44 +2,58 @@ import SwiftUI
 
 struct FirstRunRulePicker: View {
     let folderName: String
-    let rules: [Rule]
+    @State private var role: WorkspaceRole = .watch
+    @State private var ruleTemplates: [Rule]
     @State private var enabled: Set<UUID>
     @State private var recursive: Bool = false
-    let onConfirm: (_ enabledRuleIDs: Set<UUID>, _ recursive: Bool) -> Void
+    let onConfirm: (_ role: WorkspaceRole, _ enabledRuleNames: Set<String>, _ recursive: Bool) -> Void
     let onCancel: () -> Void
 
-    init(folderName: String, rules: [Rule],
-         onConfirm: @escaping (_ enabledRuleIDs: Set<UUID>, _ recursive: Bool) -> Void,
+    init(folderName: String,
+         onConfirm: @escaping (_ role: WorkspaceRole, _ enabledRuleNames: Set<String>, _ recursive: Bool) -> Void,
          onCancel: @escaping () -> Void) {
         self.folderName = folderName
-        self.rules = rules
-        self._enabled = State(initialValue: Set(rules.map(\.id)))
         self.onConfirm = onConfirm
         self.onCancel = onCancel
+        let initial = BuiltInRules.all()
+        self._ruleTemplates = State(initialValue: initial)
+        self._enabled = State(initialValue: Set(initial.map(\.id)))
     }
 
-    private var allSelected: Bool { enabled.count == rules.count }
+    private var allSelected: Bool { enabled.count == ruleTemplates.count && !ruleTemplates.isEmpty }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Header
             VStack(alignment: .leading, spacing: 6) {
                 Text(verbatim: String(format: NSLocalizedString("picker.title.format",
                     value: "Set up rules for “%@”", comment: ""), folderName))
                     .font(.title3.bold())
-                Text("picker.subtitle",
-                     comment: "Subtitle explaining what FileLens will do")
+                Text("picker.subtitle.unified")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            // Recommendation banner
+            Picker("picker.role", selection: $role) {
+                ForEach(WorkspaceRole.allCases) { r in
+                    Label(r.label, systemImage: r.systemImage).tag(r)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .onChange(of: role) { _, newRole in
+                let templates = newRole == .library
+                    ? BuiltInVideoRules.libraryPack()
+                    : BuiltInRules.all()
+                ruleTemplates = templates
+                enabled = Set(templates.map(\.id))
+                if newRole == .library { recursive = true }
+            }
+
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "lightbulb.fill")
                     .foregroundStyle(.yellow)
-                Text("picker.recommendation",
-                     comment: "Hint that the user can just click Add")
+                Text(role == .library ? "picker.recommendation.library" : "picker.recommendation.watch")
                     .font(.callout)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -50,12 +64,8 @@ struct FirstRunRulePicker: View {
                     .fill(Color.yellow.opacity(0.12))
             )
 
-            // Native inset List for the standard macOS rounded-list look —
-            // subtle hover, native separators, no hand-drawn dividers.
-            // Select-all moved to the footer alongside the count so the
-            // list reads cleanly from top to bottom.
             List {
-                ForEach(rules, id: \.id) { r in
+                ForEach(ruleTemplates, id: \.id) { r in
                     ruleRow(r)
                 }
             }
@@ -72,30 +82,26 @@ struct FirstRunRulePicker: View {
                             lineWidth: 0.5)
             )
 
-            // 范围:递归 toggle。默认关闭(只看顶层) —— 多数用户加 Downloads
-            // 这种浅目录,递归会把杂碎子项拉进来。开发者加代码目录时再开。
             HStack(spacing: 8) {
                 Toggle(isOn: $recursive) {
                     Text("picker.recursive")
                         .font(.callout)
                 }
                 .toggleStyle(.checkbox)
-                Text("picker.recursive.hint")
+                Text(role == .library ? "picker.recursive.libraryHint" : "picker.recursive.hint")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
             }
 
-            // Footer: count + select-all on the left, action buttons on
-            // the right.
             HStack(spacing: 12) {
                 Text(verbatim: String(format: NSLocalizedString("picker.selected.format",
-                    value: "%d of %d selected", comment: ""), enabled.count, rules.count))
+                    value: "%d of %d selected", comment: ""), enabled.count, ruleTemplates.count))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                 Button {
-                    enabled = allSelected ? [] : Set(rules.map(\.id))
+                    enabled = allSelected ? [] : Set(ruleTemplates.map(\.id))
                 } label: {
                     Text(allSelected ? "picker.deselectAll" : "picker.selectAll")
                         .font(.caption)
@@ -106,10 +112,10 @@ struct FirstRunRulePicker: View {
                 Button("Cancel", action: onCancel)
                     .keyboardShortcut(.cancelAction)
                 Button {
-                    onConfirm(enabled, recursive)
+                    let names = Set(ruleTemplates.filter { enabled.contains($0.id) }.map(\.name))
+                    onConfirm(role, names, recursive)
                 } label: {
-                    Text("picker.confirm",
-                         comment: "Primary button: confirm and start applying rules")
+                    Text("picker.confirm")
                         .frame(minWidth: 100)
                 }
                 .keyboardShortcut(.defaultAction)

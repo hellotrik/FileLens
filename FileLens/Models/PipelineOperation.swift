@@ -7,18 +7,10 @@
  */
 import Foundation
 
-struct CollectPlanItem: Identifiable, Equatable {
-    let id = UUID()
-    let url: URL
-    var fileName: String
-    var selected: Bool = true
-}
-
 struct PipelineOperation: Identifiable {
     let id = UUID()
 
     enum Kind {
-        case collect(inboxID: UUID, libraryID: UUID, items: [CollectPlanItem])
         case rename(workspaceID: UUID, items: [VideoRenameItem])
         case organize(workspaceID: UUID, fileCount: Int)
     }

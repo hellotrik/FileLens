@@ -39,7 +39,7 @@ enum VideoConfigImporter {
         return parsed.hasContent ? parsed : nil
     }
 
-    /// 解析 legacy 配置并创建/更新 library + inbox workspace。
+    /// 解析 legacy 配置并创建/更新 library + 文件夹 workspace。
     @discardableResult
     static func importToCatalog(context: ModelContext, force: Bool = false) throws -> String? {
         if !force, UserDefaults.standard.bool(forKey: importedKey) { return nil }
@@ -67,15 +67,14 @@ enum VideoConfigImporter {
             workspaces = try context.fetch(FetchDescriptor<Workspace>())
         }
 
-        var inboxCount = 0
+        var folderCount = 0
         for source in parsed.sources {
             let url = VideoSettings.expandPath(source)
-            _ = try VideoWorkspaceFactory.ensureInbox(
-                at: url, linkedLibrary: library, context: context,
-                existing: workspaces, sortOrder: sort
+            _ = try VideoWorkspaceFactory.ensureWatchFolder(
+                at: url, context: context, existing: workspaces, sortOrder: sort
             )
             sort += 100
-            inboxCount += 1
+            folderCount += 1
             workspaces = try context.fetch(FetchDescriptor<Workspace>())
         }
 
@@ -86,9 +85,9 @@ enum VideoConfigImporter {
             lines.append(String(format: NSLocalizedString("video.import.library.format",
                 value: "Library: %@", comment: ""), library!.folderPath))
         }
-        if inboxCount > 0 {
-            lines.append(String(format: NSLocalizedString("video.import.inboxes.format",
-                value: "%lld inbox(es)", comment: ""), Int64(inboxCount)))
+        if folderCount > 0 {
+            lines.append(String(format: NSLocalizedString("video.import.folders.format",
+                value: "%lld folder(s)", comment: ""), Int64(folderCount)))
         }
         return lines.joined(separator: "\n")
     }

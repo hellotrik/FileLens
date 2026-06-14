@@ -13,7 +13,7 @@ enum RuleRoleFilter {
         switch role {
         case .library:
             return rules.filter(isLibraryRule)
-        case .watch, .inbox:
+        case .watch:
             return rules.filter(isFolderRule)
         }
     }

@@ -24,7 +24,6 @@ enum ViewMode: Int { case grid = 1, list = 2 }
 struct PendingWorkspace: Identifiable {
     let id = UUID()
     let url: URL
-    let rules: [Rule]
 }
 
 struct ContentView: View {
@@ -161,10 +160,10 @@ struct ContentView: View {
         .sheet(item: $pendingWorkspace) { pending in
             FirstRunRulePicker(
                 folderName: pending.url.lastPathComponent,
-                rules: pending.rules,
-                onConfirm: { enabledIDs, recursive in
+                onConfirm: { role, enabledNames, recursive in
                     commitWorkspace(pending: pending,
-                                    enabledRuleIDs: enabledIDs,
+                                    role: role,
+                                    enabledRuleNames: enabledNames,
                                     recursive: recursive)
                 },
                 onCancel: {
@@ -219,9 +218,6 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .toggleActivityLog)) { _ in
             withAnimation { activityLog.toggleExpanded() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .videoSetupCompleted)) { _ in
-            Task { await activateVideoWorkspaces() }
         }
         .sheet(item: $editingRule) { rule in
             ruleEditorSheet(rule: rule)
@@ -408,25 +404,35 @@ struct ContentView: View {
         panel.allowsMultipleSelection = false
         panel.prompt = NSLocalizedString("Add Folder", value: "Add Folder", comment: "")
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        pendingWorkspace = PendingWorkspace(url: url, rules: BuiltInRules.all())
+        pendingWorkspace = PendingWorkspace(url: url)
     }
 
     private func commitWorkspace(pending: PendingWorkspace,
-                                 enabledRuleIDs: Set<UUID>,
+                                 role: WorkspaceRole,
+                                 enabledRuleNames: Set<String>,
                                  recursive: Bool) {
+        let ruleTemplates = role == .library
+            ? BuiltInVideoRules.libraryPack()
+            : BuiltInRules.all()
         do {
             let bookmark = try BookmarkStore.makeBookmark(for: pending.url)
-            // 新工作区放到现有列表之后,留 100 余量给后续拖拽插入
             let nextSort = (workspaces.map(\.sortOrder).max() ?? 0) + 100
             let ws = Workspace(name: pending.url.lastPathComponent,
                                folderPath: pending.url.path,
                                bookmarkData: bookmark,
                                sortOrder: nextSort,
-                               recursive: recursive)
+                               recursive: role == .library ? true : recursive)
+            ws.role = role
+            if role == .library {
+                ws.displayName = NSLocalizedString("Video Library", value: "Video Library", comment: "")
+                ws.pipeline = WorkspacePipelineConfig.default
+                try? FileManager.default.createDirectory(at: pending.url, withIntermediateDirectories: true)
+            }
             modelContext.insert(ws)
-            for rule in pending.rules where enabledRuleIDs.contains(rule.id) {
+            for rule in ruleTemplates where enabledRuleNames.contains(rule.name) {
                 rule.workspace = ws
                 modelContext.insert(rule)
+                for c in rule.conditions { modelContext.insert(c) }
             }
             try modelContext.save()
             selectedWorkspace = ws
@@ -689,14 +695,6 @@ struct ContentView: View {
     @ViewBuilder
     private func pipelineToolbarItems(for ws: Workspace) -> some View {
         switch ws.role {
-        case .inbox:
-            Button {
-                Task { await planCollect(from: ws) }
-            } label: {
-                Label("Collect", systemImage: "arrow.right.circle")
-            }
-            .disabled(pipelineRunning || ws.linkedLibraryUUID == nil)
-            .help("Preview and collect videos into linked library")
         case .library:
             Button {
                 presentRenamePlan(workspace: ws, files: nil)
@@ -731,8 +729,6 @@ struct ContentView: View {
             if !videoOperationTargets().isEmpty {
                 videoTagToolbarItems(for: ws)
             }
-        case .none:
-            EmptyView()
         }
     }
 
@@ -1020,29 +1016,6 @@ struct ContentView: View {
         }
     }
 
-    private func planCollect(from inbox: Workspace) async {
-        guard let libID = inbox.linkedLibraryUUID else {
-            ToastCenter.shared.error(
-                NSLocalizedString("pipeline.collect.noLibrary",
-                                  value: "Set a target library in Folder Settings → Pipeline.",
-                                  comment: ""))
-            return
-        }
-        pipelineRunning = true
-        ActivityLog.shared.append(NSLocalizedString("activity.collect.scanning",
-            value: "Scanning inbox for videos…", comment: ""))
-        let items = await VideoPipelineRunner.planCollect(inbox: inbox)
-        pipelineRunning = false
-        ActivityLog.shared.append(String(format:
-            NSLocalizedString("activity.collect.found.format",
-                value: "Found %lld video(s) in inbox.", comment: ""),
-            Int64(items.count)))
-        activityLog.isExpanded = true
-        pipelineOperation = PipelineOperation(
-            kind: .collect(inboxID: inbox.id, libraryID: libID, items: items)
-        )
-    }
-
     private func presentRenamePlan(workspace: Workspace, files: [FileNode]?) {
         guard let storeCtx = try? storeManager?.store(for: workspace.id).mainContext else { return }
         let nodes: [FileNode]
@@ -1065,19 +1038,7 @@ struct ContentView: View {
 
     private func refreshAfterPipeline() async {
         guard let ws = selectedWorkspace else { return }
-        if ws.role == .inbox, let libID = ws.linkedLibraryUUID,
-           let library = workspaces.first(where: { $0.id == libID }) {
-            await coordinator?.activate(workspace: ws, forceRescan: true)
-            await coordinator?.activate(workspace: library, forceRescan: true)
-        } else {
-            await coordinator?.activate(workspace: ws, forceRescan: true)
-        }
-    }
-
-    private func activateVideoWorkspaces() async {
-        for ws in workspaces where ws.role != .watch {
-            await coordinator?.activate(workspace: ws, forceRescan: true)
-        }
+        await coordinator?.activate(workspace: ws, forceRescan: true)
     }
 
     /// 抽出 sheet content 减小 body 类型推导负担。

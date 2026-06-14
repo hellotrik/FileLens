@@ -7,18 +7,22 @@
  */
 import Foundation
 
-/// Workspace 在 FileLens 中的角色：浏览 / 视频摄入 / 视频库。
+/// Workspace 在 FileLens 中的角色：文件夹浏览 / 视频库。
 enum WorkspaceRole: String, CaseIterable, Identifiable, Codable {
     case watch = "watch"
-    case inbox = "inbox"
     case library = "library"
 
     var id: String { rawValue }
 
+    /// 旧版 `inbox` 摄入源已移除，读库时当作文件夹。
+    static func resolved(raw: String) -> WorkspaceRole {
+        if raw == "inbox" { return .watch }
+        return WorkspaceRole(rawValue: raw) ?? .watch
+    }
+
     var label: String {
         switch self {
         case .watch:   return NSLocalizedString("workspace.role.watch", value: "文件夹", comment: "")
-        case .inbox:   return NSLocalizedString("workspace.role.inbox", value: "摄入源", comment: "")
         case .library: return NSLocalizedString("workspace.role.library", value: "视频库", comment: "")
         }
     }
@@ -26,7 +30,6 @@ enum WorkspaceRole: String, CaseIterable, Identifiable, Codable {
     var sidebarSectionTitle: String {
         switch self {
         case .watch:   return NSLocalizedString("workspace.section.folders", value: "Folders", comment: "")
-        case .inbox:   return NSLocalizedString("workspace.section.inboxes", value: "Inboxes", comment: "")
         case .library: return NSLocalizedString("workspace.section.libraries", value: "Libraries", comment: "")
         }
     }
@@ -34,23 +37,20 @@ enum WorkspaceRole: String, CaseIterable, Identifiable, Codable {
     var systemImage: String {
         switch self {
         case .watch:   return "folder"
-        case .inbox:   return "tray.and.arrow.down"
         case .library: return "film.stack"
         }
     }
 
-    /// 工具栏 Finder 标签模式：文件夹走规则分类，视频库走 ffprobe 四维标签，摄入源无。
+    /// 工具栏 Finder 标签模式：文件夹走规则分类，视频库走 ffprobe 四维标签。
     enum FinderTagToolbarMode {
         case ruleCategories
         case videoMetadata
-        case none
     }
 
     var finderTagToolbarMode: FinderTagToolbarMode {
         switch self {
         case .watch:   return .ruleCategories
         case .library: return .videoMetadata
-        case .inbox:   return .none
         }
     }
 }
@@ -89,7 +89,7 @@ enum WorkspacePipelineCodec {
 
 extension Workspace {
     var role: WorkspaceRole {
-        get { WorkspaceRole(rawValue: roleRaw) ?? .watch }
+        get { WorkspaceRole.resolved(raw: roleRaw) }
         set { roleRaw = newValue.rawValue }
     }
 

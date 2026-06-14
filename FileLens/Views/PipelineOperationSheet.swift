@@ -20,12 +20,9 @@ struct PipelineOperationSheet: View {
     let operation: PipelineOperation
     let onFinished: () -> Void
 
-    @State private var collectItems: [CollectPlanItem] = []
     @State private var renameItems: [VideoRenameItem] = []
     @State private var organizeCount = 0
     @State private var workspaceID: UUID?
-    @State private var inboxID: UUID?
-    @State private var libraryID: UUID?
     @State private var applying = false
     @State private var errorMessage: String?
 
@@ -53,7 +50,6 @@ struct PipelineOperationSheet: View {
 
     private var title: String {
         switch operation.kind {
-        case .collect:  return NSLocalizedString("operation.collect.title", value: "Collect Videos", comment: "")
         case .rename:   return NSLocalizedString("operation.rename.title", value: "Clean Filenames", comment: "")
         case .organize: return NSLocalizedString("operation.organize.title", value: "Organize to Finder", comment: "")
         }
@@ -62,37 +58,10 @@ struct PipelineOperationSheet: View {
     @ViewBuilder
     private var content: some View {
         switch operation.kind {
-        case .collect:
-            collectList
         case .rename:
             renameList
         case .organize:
             organizeConfirm
-        }
-    }
-
-    private var collectList: some View {
-        Group {
-            if collectItems.isEmpty {
-                emptyHint(NSLocalizedString("operation.collect.empty",
-                                            value: "No videos found in this inbox.", comment: ""))
-            } else {
-                List {
-                    ForEach($collectItems) { $item in
-                        HStack {
-                            Toggle("", isOn: $item.selected).labelsHidden()
-                            VStack(alignment: .leading) {
-                                Text(verbatim: item.fileName).font(.callout)
-                                Text(verbatim: item.url.deletingLastPathComponent().path)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -147,11 +116,7 @@ struct PipelineOperationSheet: View {
 
     private var footer: some View {
         HStack {
-            if case .collect = operation.kind {
-                Text(verbatim: "\(collectItems.filter(\.selected).count) / \(collectItems.count)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if case .rename = operation.kind {
+            if case .rename = operation.kind {
                 Text(verbatim: "\(renameItems.filter(\.selected).count) selected")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -168,7 +133,6 @@ struct PipelineOperationSheet: View {
 
     private var applyTitle: String {
         switch operation.kind {
-        case .collect:  return NSLocalizedString("operation.apply.collect", value: "Collect", comment: "")
         case .rename:   return NSLocalizedString("operation.apply.rename", value: "Rename", comment: "")
         case .organize: return NSLocalizedString("operation.apply.organize", value: "Organize", comment: "")
         }
@@ -176,7 +140,6 @@ struct PipelineOperationSheet: View {
 
     private var canApply: Bool {
         switch operation.kind {
-        case .collect:  return collectItems.contains(where: \.selected)
         case .rename:   return renameItems.contains(where: \.selected)
         case .organize: return organizeCount > 0
         }
@@ -184,10 +147,6 @@ struct PipelineOperationSheet: View {
 
     private func loadFromOperation() {
         switch operation.kind {
-        case .collect(let inbox, let library, let items):
-            inboxID = inbox
-            libraryID = library
-            collectItems = items
         case .rename(let wsID, let items):
             workspaceID = wsID
             renameItems = items
@@ -201,29 +160,11 @@ struct PipelineOperationSheet: View {
         applying = true
         defer { applying = false }
         switch operation.kind {
-        case .collect:
-            await applyCollect()
         case .rename:
             await applyRename()
         case .organize:
             await applyOrganize()
         }
-    }
-
-    private func applyCollect() async {
-        guard let inboxID, let libraryID,
-              let inbox = fetchWorkspace(inboxID),
-              let library = fetchWorkspace(libraryID) else { return }
-        let urls = collectItems.filter(\.selected).map(\.url)
-        guard !urls.isEmpty else { return }
-        let result = await VideoPipelineRunner.executeCollect(sources: urls, library: library)
-        result.log.forEach { ActivityLog.shared.append($0) }
-        ActivityLog.shared.append(String(format:
-            NSLocalizedString("activity.collect.done.format",
-                value: "Collected %lld video(s), %lld failed.", comment: ""),
-            Int64(result.collected), Int64(result.failed)))
-        onFinished()
-        dismiss()
     }
 
     private func applyRename() async {
