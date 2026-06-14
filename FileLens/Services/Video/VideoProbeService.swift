@@ -25,16 +25,25 @@ struct VideoProbeResult: Sendable {
 }
 
 enum VideoProbeService {
+    /// GUI 启动的 macOS app 通常不带 shell 的 PATH（没有 `/opt/homebrew/bin`），
+    /// 不能 rely on `/usr/bin/which` 或 `/usr/bin/env ffprobe`。
+    private static let ffprobeCandidates = [
+        "/opt/homebrew/bin/ffprobe",
+        "/usr/local/bin/ffprobe",
+        "/opt/local/bin/ffprobe",
+        "/usr/bin/ffprobe",
+    ]
+
+    static func ffprobeURL() -> URL? {
+        let fm = FileManager.default
+        for path in ffprobeCandidates where fm.isExecutableFile(atPath: path) {
+            return URL(fileURLWithPath: path)
+        }
+        return nil
+    }
+
     static func isAvailable() -> Bool {
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        proc.arguments = ["ffprobe"]
-        let pipe = Pipe()
-        proc.standardOutput = pipe
-        proc.standardError = FileHandle.nullDevice
-        guard (try? proc.run()) != nil else { return false }
-        proc.waitUntilExit()
-        return proc.terminationStatus == 0
+        ffprobeURL() != nil
     }
 
     /// 探测单个视频；失败返回仅含 mtime 的兜底或空 meta。
@@ -42,10 +51,13 @@ enum VideoProbeService {
         guard FileManager.default.isReadableFile(atPath: url.path) else {
             return filesystemFallback(url: url)
         }
+        guard let ffprobe = ffprobeURL() else {
+            return filesystemFallback(url: url)
+        }
         let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        proc.executableURL = ffprobe
         proc.arguments = [
-            "ffprobe", "-v", "quiet", "-print_format", "json",
+            "-v", "quiet", "-print_format", "json",
             "-show_format", "-show_streams", url.path
         ]
         let out = Pipe()

@@ -21,10 +21,10 @@
             "type": "shell",
             "icon": {
                 "id": "rocket",
-                "tooltip": "xcodebuild Release"
+                "tooltip": "Release → .release/arm64/Build/Products/Release/FileLens.app"
             },
             "dependsOn": ["filelens-xcodegen"],
-            "command": "xcodebuild -project FileLens.xcodeproj -scheme FileLens -configuration Release -destination 'platform=macOS' build",
+            "command": "xcodebuild -project FileLens.xcodeproj -scheme FileLens -configuration Release -derivedDataPath ${workspaceFolder}/.release/arm64 -destination 'platform=macOS' ARCHS=arm64 ONLY_ACTIVE_ARCH=NO build",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
