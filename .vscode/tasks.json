@@ -44,6 +44,20 @@
                 "cwd": "${workspaceFolder}"
             },
             "problemMatcher": ["$gcc"]
+        },
+        {
+            "id": "filelens-clean",
+            "label": "FileLens: Clean",
+            "type": "shell",
+            "icon": {
+                "id": "refresh",
+                "tooltip": "清除 .dev-build / .release / dist 等构建产物"
+            },
+            "command": "./Scripts/clean.sh",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
         }
     ]
 }
