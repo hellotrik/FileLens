@@ -249,6 +249,9 @@ struct ContentView: View {
                 else      { await coordinator?.deactivate() }
             }
         }
+        .onChange(of: selection) { _, _ in
+            selectedFileIDs.removeAll()
+        }
         .onChange(of: selectedFileIDs) { _, ids in
             if autoExpandInspector, !ids.isEmpty {
                 showInspector = true
@@ -282,78 +285,43 @@ struct ContentView: View {
         if let cached = filesMemo.get(workspace: ws,
                                       selection: selection,
                                       search: debouncedSearchText) {
-            return cached
+            return cached.files
         }
 
-        // 走 per-workspace store 取 FileNode。同一个 store 里的所有 FileNode
-        // 都是这一个 workspace 的(物理隔离),所以不需要 workspace.id predicate。
         guard let manager = storeManager,
               let storeCtx = try? manager.store(for: ws.id).mainContext else {
             return []
         }
 
-        // 过滤下推到 SQL。老实现先 fetch 全表 → in-memory `.tags` 遍历过滤,
-        // 11k+ 节点每个都触发 SwiftData lazy fault 单条 SQL roundtrip,主线
-        // 程卡到秒级。SidebarView.filesCount 已经是这套写法,这里对齐。
-        // sortBy 顺手交给 SQL 排,渲染层桶内再 sort 不会重复扫全表。
-        let sortByDateAddedDesc = [SortDescriptor(\FileNode.dateAdded, order: .reverse)]
-        let base: [FileNode]
-        switch selection {
-        case .tag(_, let name):
-            // 用 ruleID 而非 rule.name —— name 是 @Bindable 实时字段,编辑器
-            // 输入时会跟 FileTag.name 短暂错位,误命中空集。规则被删后
-            // selection 暂停留 → 空列表,sidebar 下一帧那条 tag 自然消失。
-            guard let ruleID = ws.rules.first(where: { $0.name == name })?.id else {
-                base = []
-                break
-            }
-            let descriptor = FetchDescriptor<FileNode>(
-                predicate: #Predicate<FileNode> { f in
-                    f.isPresent && f.tags.contains { $0.ruleID == ruleID }
-                },
-                sortBy: sortByDateAddedDesc
-            )
-            base = (try? storeCtx.fetch(descriptor)) ?? []
-        case .manualTag(_, let name):
-            let descriptor = FetchDescriptor<FileNode>(
-                predicate: #Predicate<FileNode> { f in
-                    f.isPresent && f.tags.contains { $0.source == "manual" && $0.name == name }
-                },
-                sortBy: sortByDateAddedDesc
-            )
-            base = (try? storeCtx.fetch(descriptor)) ?? []
-        case .uncategorized:
-            let descriptor = FetchDescriptor<FileNode>(
-                predicate: #Predicate<FileNode> { f in
-                    f.isPresent && f.tags.isEmpty
-                },
-                sortBy: sortByDateAddedDesc
-            )
-            base = (try? storeCtx.fetch(descriptor)) ?? []
-        default:
-            let descriptor = FetchDescriptor<FileNode>(
-                predicate: #Predicate<FileNode> { $0.isPresent },
-                sortBy: sortByDateAddedDesc
-            )
-            base = (try? storeCtx.fetch(descriptor)) ?? []
-        }
-
-        // 搜索字段(name)是 attribute 不是 relationship,内存遍历不触发
-        // fault;SwiftData #Predicate 也不支持 localizedCaseInsensitiveContains,
-        // 这一步留在内存里。
-        let filtered: [FileNode] = debouncedSearchText.isEmpty
-            ? base
-            : base.filter { $0.name.localizedCaseInsensitiveContains(debouncedSearchText) }
-
-        // 转 sendable struct snapshot —— cell 渲染时不持有 @Model 引用,跳过
-        // SwiftUI ObservationRegistrar 的 KeyPath 注册 / cancel 风暴。
-        let result: [FileSnapshot] = filtered.map { FileSnapshot($0) }
+        let ruleID = FileListQuery.ruleID(for: selection, rules: ws.rules)
+        let result = FileListQuery.fetchSync(
+            storeCtx: storeCtx,
+            selection: selection,
+            ruleID: ruleID,
+            search: debouncedSearchText
+        )
 
         filesMemo.set(workspace: ws,
                       selection: selection,
                       search: debouncedSearchText,
-                      files: result)
-        return result
+                      entry: cachedEntry(from: result))
+        return result.files
+    }
+
+    private func tagsForCurrentSelection(workspace ws: Workspace) -> [UUID: [String]] {
+        if let cached = filesMemo.get(workspace: ws,
+                                      selection: selection,
+                                      search: debouncedSearchText) {
+            return cached.tagsByFileID
+        }
+        _ = filesForCurrentSelection(workspace: ws)
+        return filesMemo.get(workspace: ws,
+                             selection: selection,
+                             search: debouncedSearchText)?.tagsByFileID ?? [:]
+    }
+
+    private func cachedEntry(from result: FileListQuery.ListFetchResult) -> FilesMemo.CacheEntry {
+        FilesMemo.CacheEntry(files: result.files, tagsByFileID: result.tagsByFileID)
     }
 
     /// 把 FileSnapshot 列表反查回 FileNode managed objects。点击 / 拖拽 /
@@ -377,33 +345,6 @@ struct ContentView: View {
 
     private func resolveFileNode(_ snapshot: FileSnapshot) -> FileNode? {
         resolveFileNodes([snapshot]).first
-    }
-
-    /// `[fileID : [tag display names]]` map,Tags 列渲染用。FilesMemo lazy
-    /// 缓存,fileCount 变化(scan 完成)整 bucket 清空 → 下次重建。
-    /// 第一次 build:fetch 全 workspace 含 rule tag 的 FileNode + 解 tags
-    /// 关系,主线程 ~100ms 量级一次。后续 SwiftUI body recompute 命中 cache。
-    private func tagsMapForWorkspace(_ ws: Workspace) -> [UUID: [String]] {
-        guard let manager = storeManager,
-              let storeCtx = try? manager.store(for: ws.id).mainContext
-        else { return [:] }
-        return filesMemo.tagsByFileID(workspace: ws) {
-            let descriptor = FetchDescriptor<FileNode>(
-                predicate: #Predicate<FileNode> { f in
-                    f.isPresent && !f.tags.isEmpty
-                }
-            )
-            let nodes = (try? storeCtx.fetch(descriptor)) ?? []
-            var byFile: [UUID: [String]] = [:]
-            byFile.reserveCapacity(nodes.count)
-            for node in nodes {
-                let names = node.tags.map(\.name)
-                if !names.isEmpty {
-                    byFile[node.id] = names
-                }
-            }
-            return byFile
-        }
     }
 
     private func addFolder() {
@@ -568,17 +509,21 @@ struct ContentView: View {
     @ViewBuilder
     private func readyDetail(_ ws: Workspace) -> some View {
         let files = filesForCurrentSelection(workspace: ws)
-        let selectedSnapshots = files.filter { selectedFileIDs.contains($0.id) }
+        let selectedSnapshots: [FileSnapshot] = selectedFileIDs.isEmpty
+            ? []
+            : files.filter { selectedFileIDs.contains($0.id) }
         // Inspector 需要 FileNode 读 tags 关系。但只 resolve selected(通常 1-3 个),
         // 不影响 cell 渲染主路径。
-        let selectedFiles = resolveFileNodes(selectedSnapshots)
+        let selectedFiles = selectedSnapshots.isEmpty
+            ? []
+            : resolveFileNodes(selectedSnapshots)
         let workspaceRules = ws.rules
         let inspectorSnapshot: InspectorSnapshot? = selectedFiles.first.map { f in
             InspectorSnapshot(file: f, rules: workspaceRules)
         }
-        // Tags 列用的 fileID → tag 名字 map。FilesMemo 内 lazy 缓存,fileCount
-        // 变化(scan 完成写回)清空。第一次构造跑 ~100ms 主线程,之后命中 0ms。
-        let tagsByFileID = tagsMapForWorkspace(ws)
+        let tagsByFileID = viewMode.wrappedValue == .list
+            ? tagsForCurrentSelection(workspace: ws)
+            : [:]
         // 不用 SwiftUI 的 .inspector(isPresented:) —— 它底层是 NSSplitViewController,
         // pane slide 动画跟内容首帧渲染会撞,表现就是用户看到的"半 → 卡 → 半"
         // (slide 到一半 SwiftUI 同步渲染 inspector 内容、阻塞 main、动画卡住,
@@ -1381,49 +1326,36 @@ struct ContentView: View {
 /// cache 持有的引用始终是最新值;只有 isPresent 反转(vanished)的 stale 行
 /// 会留在 cache 里 —— 等 fileCount 更新时一并清掉。
 private final class FilesMemo {
+    struct CacheEntry {
+        let files: [FileSnapshot]
+        let tagsByFileID: [UUID: [String]]
+    }
+
     private struct Bucket {
         var versionKey: String
-        var entries: [String: [FileSnapshot]]
-        /// `[fileID : tag display names]`,Tags 列用。第一次访问按需 lazy
-        /// 填充;fileCount 变化(scan 完成写回)Bucket 重建时一并清空。
-        var tagsByFileID: [UUID: [String]]?
+        var entries: [String: CacheEntry]
     }
     private var byWorkspace: [UUID: Bucket] = [:]
 
-    func get(workspace ws: Workspace, selection: SidebarSelection?, search: String) -> [FileSnapshot]? {
+    func get(workspace ws: Workspace, selection: SidebarSelection?, search: String) -> CacheEntry? {
         let v = Self.versionKey(ws: ws)
         guard let bucket = byWorkspace[ws.id], bucket.versionKey == v else {
-            byWorkspace[ws.id] = Bucket(versionKey: v, entries: [:], tagsByFileID: nil)
+            byWorkspace[ws.id] = Bucket(versionKey: v, entries: [:])
             return nil
         }
         let k = Self.selectionKey(selection: selection, search: search)
         return bucket.entries[k]
     }
 
-    func set(workspace ws: Workspace, selection: SidebarSelection?, search: String, files: [FileSnapshot]) {
+    func set(workspace ws: Workspace, selection: SidebarSelection?, search: String, entry: CacheEntry) {
         let v = Self.versionKey(ws: ws)
-        var bucket = byWorkspace[ws.id] ?? Bucket(versionKey: v, entries: [:], tagsByFileID: nil)
+        var bucket = byWorkspace[ws.id] ?? Bucket(versionKey: v, entries: [:])
         if bucket.versionKey != v {
-            bucket = Bucket(versionKey: v, entries: [:], tagsByFileID: nil)
+            bucket = Bucket(versionKey: v, entries: [:])
         }
         let k = Self.selectionKey(selection: selection, search: search)
-        bucket.entries[k] = files
+        bucket.entries[k] = entry
         byWorkspace[ws.id] = bucket
-    }
-
-    /// 取 [fileID : [tag names]] map。第一次缺失时由 caller 提供 builder
-    /// (一次性 fetch FileTag),之后 cache 命中。fileCount 变化整 bucket 清空。
-    func tagsByFileID(workspace ws: Workspace, build: () -> [UUID: [String]]) -> [UUID: [String]] {
-        let v = Self.versionKey(ws: ws)
-        var bucket = byWorkspace[ws.id] ?? Bucket(versionKey: v, entries: [:], tagsByFileID: nil)
-        if bucket.versionKey != v {
-            bucket = Bucket(versionKey: v, entries: [:], tagsByFileID: nil)
-        }
-        if let cached = bucket.tagsByFileID { return cached }
-        let built = build()
-        bucket.tagsByFileID = built
-        byWorkspace[ws.id] = bucket
-        return built
     }
 
     private static func versionKey(ws: Workspace) -> String {

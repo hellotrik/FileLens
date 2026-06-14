@@ -23,8 +23,6 @@ import UniformTypeIdentifiers
 struct FileTableView: View {
     @Bindable var workspace: Workspace
     let files: [FileSnapshot]
-    /// `[file.id : tag display names]` —— Tags 列用,跟 cell 渲染解耦,
-    /// 上层一次性 fetch 所有 FileTag 后建 map 传进来。
     let tagsByFileID: [UUID: [String]]
     @Binding var selection: Set<UUID>
     let resolveNodes: ([FileSnapshot]) -> [FileNode]
@@ -855,7 +853,13 @@ private final class FileTableRowsCache {
               ascending: Bool) -> [FileTableRow] {
         let key = "\(identityKey)|\(sortKey.rawValue)|\(ascending)"
         if key == lastKey { return lastRows }
-        let sorted = FileTableSorter.sort(files, by: sortKey, ascending: ascending)
+        let sorted: [FileSnapshot]
+        if sortKey == .dateAdded, !ascending {
+            // FileListQuery 已按 dateAdded desc 排序,默认视图无需再 O(n log n)。
+            sorted = files
+        } else {
+            sorted = FileTableSorter.sort(files, by: sortKey, ascending: ascending)
+        }
         lastRows = FileTableRowBuilder.makeRows(sortedFiles: sorted, sortKey: sortKey)
         lastKey = key
         return lastRows
